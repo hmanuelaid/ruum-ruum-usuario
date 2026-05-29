@@ -487,3 +487,6 @@ html, body {
   .page-content { max-width: 960px; padding: 40px 48px; }
   .toast { left: calc(260px + 50%); }
 }
+/* ─── Timeline fix ───────────────────────────────────────────── */
+.timeline { list-style: none; padding: 0; margin: 0; }
+.timeline-item.done .timeline-dot.done { background: var(--success); border-color: var(--success); }

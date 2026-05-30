@@ -5,19 +5,11 @@ import { useAuthStore } from '@/lib/store'
 
 export default function Home() {
   const router = useRouter()
-  const { isAuthenticated, firstLaunch, onboardingComplete } = useAuthStore()
+  const { isAuthenticated } = useAuthStore()
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      if (firstLaunch && !onboardingComplete) {
-        router.replace('/onboarding')
-      } else {
-        router.replace('/login')
-      }
-    } else {
-      router.replace('/inicio')
-    }
-  }, [isAuthenticated, firstLaunch, onboardingComplete, router])
+    router.replace(isAuthenticated ? '/dashboard' : '/login')
+  }, [isAuthenticated, router])
 
   return null
 }

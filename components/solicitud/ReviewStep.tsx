@@ -77,7 +77,7 @@ if (isRealUUID) {
   status: 'solicitud_recibida',
   service_type: draft.serviceType ?? 'personal',
   user_id: user.id,
-  vehicle_id: vehicleId,
+  
   vehicle_brand: draft.vehicle.brand,
   vehicle_model: draft.vehicle.model,
   vehicle_color: draft.vehicle.color,

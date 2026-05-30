@@ -28,11 +28,9 @@ export default function DocumentosPage() {
     const reg = raw ? JSON.parse(raw) : {}
 
     // 1. Crear usuario en Supabase Auth
-    const email = `${reg.phone?.replace(/\D/g, '')}@ruumruum.app`
     const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email,
+      email: reg.email ?? '',
       password: reg.password,
-      options: { data: { name: reg.name, phone: reg.phone } },
     })
 
     if (signUpError) { setError(signUpError.message); setSubmitting(false); return }
@@ -43,7 +41,7 @@ export default function DocumentosPage() {
       .insert({
         auth_id: authData.user?.id,
         name: reg.name,
-        email: reg.email || email,
+        email: reg.email ?? '',
         phone: reg.phone,
         type: 'personal',
         status: 'activo',

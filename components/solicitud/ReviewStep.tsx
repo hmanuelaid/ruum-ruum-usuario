@@ -42,14 +42,18 @@ export default function ReviewStep() {
     const tripId = idData ?? `RR-${Date.now()}`
 
     // Crear vehículo si no existe
-   let vehicleId: string | null = null
-const isMockId = draft.vehicle.id && !draft.vehicle.id.includes('-')
-if (draft.vehicle.id && !isMockId) {
-  vehicleId = draft.vehicle.id
+ let vehicleId: string | null = null
+// Solo usar vehicle_id si es un UUID real (contiene guiones y tiene 36 chars)
+const isRealUUID = draft.vehicle.id &&
+  draft.vehicle.id.length === 36 &&
+  draft.vehicle.id.split('-').length === 5
+
+if (isRealUUID) {
+  vehicleId = draft.vehicle.id!
 } else {
-      const { data: veh } = await supabase
-        .from('vehicles')
-        .insert({
+  const { data: veh } = await supabase
+    .from('vehicles')
+    .insert({
           owner_id: user.id,
           alias: draft.vehicle.alias ?? `${draft.vehicle.brand} ${draft.vehicle.model}`,
           brand: draft.vehicle.brand,

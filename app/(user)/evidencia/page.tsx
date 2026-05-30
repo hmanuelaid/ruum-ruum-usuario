@@ -4,11 +4,21 @@ import { mockTrips } from '@/lib/mock-data'
 import { Chip } from '@/components/ui/Chip'
 
 export default function EvidenciaPage() {
-  const [selected, setSelected] = useState(mockTrips[0].id)
-  const trip = mockTrips.find(t => t.id === selected) ?? mockTrips[0]
+  const [selected, setSelected] = useState<string | null>(
+    mockTrips.length > 0 ? mockTrips[0].id : null
+  )
+  const trip = mockTrips.find(t => t.id === selected) ?? null
 
-  const inicial = trip.evidence.find(e => e.type === 'inicial')
-  const final   = trip.evidence.find(e => e.type === 'final')
+  const inicial = trip?.evidence.find(e => e.type === 'inicial')
+  const final   = trip?.evidence.find(e => e.type === 'final')
+
+  if (mockTrips.length === 0) return (
+    <div className="card" style={{ textAlign: 'center', padding: '40px 16px' }}>
+      <p style={{ fontSize: 32, marginBottom: 8 }}>📸</p>
+      <p style={{ fontWeight: 600, marginBottom: 4 }}>Sin evidencia disponible</p>
+      <p className="muted">La evidencia de tus traslados aparecerá aquí.</p>
+    </div>
+  )
 
   return (
     <>
@@ -39,64 +49,61 @@ export default function EvidenciaPage() {
       </section>
 
       {/* Evidencia inicial */}
-      <section>
-        <div className="section-head" style={{ marginBottom: 10 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700 }}>Evidencia inicial</h2>
-          {inicial ? <Chip variant="success">Disponible</Chip> : <Chip variant="default">Pendiente</Chip>}
-        </div>
-        {inicial ? (
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="evidence-grid">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="evidence-thumb">📷</div>
-              ))}
+      {trip && (
+        <>
+          <section>
+            <div className="section-head" style={{ marginBottom: 10 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700 }}>Evidencia inicial</h2>
+              {inicial ? <Chip variant="success">Disponible</Chip> : <Chip variant="default">Pendiente</Chip>}
             </div>
-            <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
-              <span><strong>{inicial.kmReading?.toLocaleString('es-MX')}</strong> km</span>
-              <span><strong>{inicial.fuelLevel}%</strong> combustible</span>
-            </div>
-            {inicial.notes && <p className="muted">{inicial.notes}</p>}
-            <p className="muted" style={{ fontSize: 12 }}>
-              {inicial.timestamp ? new Date(inicial.timestamp).toLocaleString('es-MX') : ''}
-            </p>
-          </div>
-        ) : (
-          <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
-            <p className="muted">La evidencia inicial estará disponible cuando el conductor reciba el vehículo.</p>
-          </div>
-        )}
-      </section>
+            {inicial ? (
+              <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="evidence-grid">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="evidence-thumb">📷</div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
+                  {inicial.kmReading && <span><strong>{inicial.kmReading.toLocaleString('es-MX')}</strong> km</span>}
+                  {inicial.fuelLevel && <span><strong>{inicial.fuelLevel}%</strong> combustible</span>}
+                </div>
+                {inicial.notes && <p className="muted">{inicial.notes}</p>}
+              </div>
+            ) : (
+              <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
+                <p className="muted">Disponible cuando el conductor reciba el vehículo.</p>
+              </div>
+            )}
+          </section>
 
-      {/* Evidencia final */}
-      <section>
-        <div className="section-head" style={{ marginBottom: 10 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700 }}>Evidencia final</h2>
-          {final ? <Chip variant="success">Disponible</Chip> : <Chip variant="default">Pendiente</Chip>}
-        </div>
-        {final ? (
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="evidence-grid">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="evidence-thumb">📷</div>
-              ))}
+          {/* Evidencia final */}
+          <section>
+            <div className="section-head" style={{ marginBottom: 10 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700 }}>Evidencia final</h2>
+              {final ? <Chip variant="success">Disponible</Chip> : <Chip variant="default">Pendiente</Chip>}
             </div>
-            <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
-              <span><strong>{final.kmReading?.toLocaleString('es-MX')}</strong> km</span>
-              <span><strong>{final.fuelLevel}%</strong> combustible</span>
-            </div>
-            {final.notes && <p className="muted">{final.notes}</p>}
-            <p className="muted" style={{ fontSize: 12 }}>
-              {final.timestamp ? new Date(final.timestamp).toLocaleString('es-MX') : ''}
-            </p>
-          </div>
-        ) : (
-          <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
-            <p className="muted">La evidencia final estará disponible al completar la entrega.</p>
-          </div>
-        )}
-      </section>
+            {final ? (
+              <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="evidence-grid">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="evidence-thumb">📷</div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
+                  {final.kmReading && <span><strong>{final.kmReading.toLocaleString('es-MX')}</strong> km</span>}
+                  {final.fuelLevel && <span><strong>{final.fuelLevel}%</strong> combustible</span>}
+                </div>
+                {final.notes && <p className="muted">{final.notes}</p>}
+              </div>
+            ) : (
+              <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
+                <p className="muted">Disponible al completar la entrega.</p>
+              </div>
+            )}
+          </section>
+        </>
+      )}
 
-      {/* Principio clave */}
       <div className="card" style={{ textAlign: 'center', padding: '20px 16px' }}>
         <p style={{ fontSize: 20, marginBottom: 6 }}>📸</p>
         <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>La evidencia es tu tranquilidad</p>

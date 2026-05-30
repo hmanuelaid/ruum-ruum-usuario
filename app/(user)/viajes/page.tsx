@@ -10,44 +10,60 @@ const STATUS_LABELS: Record<string, string> = {
   solicitud_recibida: 'Solicitud recibida', pendiente_revision: 'En revisión',
   pendiente_asignacion: 'Sin conductor', conductor_asignado: 'Conductor asignado',
   conductor_en_camino: 'En camino', recoleccion_proceso: 'Recolección',
-  vehiculo_documentado: 'Documentado', traslado_curso: 'En curso',
-  llegando_destino: 'Llegando', entrega_proceso: 'Entrega',
+  evidencia_inicial_pendiente: 'Ev. inicial', traslado_curso: 'En curso',
+  entrega_proceso: 'Entrega', evidencia_final_pendiente: 'Ev. final',
   finalizado: 'Finalizado', cancelado: 'Cancelado', incidente: 'Incidente',
 }
 
 const ACTIVE = ['solicitud_recibida','pendiente_revision','pendiente_asignacion',
   'conductor_asignado','conductor_en_camino','recoleccion_proceso',
-  'traslado_curso','llegando_destino','entrega_proceso']
+  'evidencia_inicial_pendiente','traslado_curso','entrega_proceso',
+  'evidencia_final_pendiente','incidente']
+
+interface UserTrip {
+  id: string
+  status: string
+  vehicle_brand: string | null
+  vehicle_model: string | null
+  vehicle_plates: string | null
+  origin_address: string | null
+  destination_address: string | null
+  client_price_mxn: number | null
+}
 
 export default function ViajesPage() {
   const [tab, setTab] = useState<Tab>('Activos')
-  const [trips, setTrips] = useState<any[]>([])
+  const [trips, setTrips] = useState<UserTrip[]>([])
   const [loading, setLoading] = useState(true)
   const { user } = useAuthStore()
 
   useEffect(() => {
     if (!user) return
-    loadTrips()
+    const userId = user.id
+    let cancelled = false
+
+    async function loadTrips() {
+      const supabase = createClient()
+      let query = supabase
+        .from('trips')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      if (tab === 'Activos')     query = query.in('status', ACTIVE)
+      if (tab === 'Programados') query = query.in('status', ACTIVE).not('scheduled_at', 'is', null)
+      if (tab === 'Finalizados') query = query.eq('status', 'finalizado')
+      if (tab === 'Cancelados')  query = query.eq('status', 'cancelado')
+
+      const { data } = await query
+      if (cancelled) return
+      setTrips(data ?? [])
+      setLoading(false)
+    }
+
+    void loadTrips()
+    return () => { cancelled = true }
   }, [user, tab])
-
-  async function loadTrips() {
-    setLoading(true)
-    const supabase = createClient()
-    let query = supabase
-      .from('trips')
-      .select('*')
-      .eq('user_id', user!.id)
-      .order('created_at', { ascending: false })
-
-    if (tab === 'Activos')     query = query.in('status', ACTIVE)
-    if (tab === 'Programados') query = query.in('status', ACTIVE).not('scheduled_at', 'is', null)
-    if (tab === 'Finalizados') query = query.eq('status', 'finalizado')
-    if (tab === 'Cancelados')  query = query.eq('status', 'cancelado')
-
-    const { data } = await query
-    setTrips(data ?? [])
-    setLoading(false)
-  }
 
   return (
     <>

@@ -38,22 +38,26 @@ export default function ReviewStep() {
     const supabase = createClient()
 
     // Generar ID de viaje
-    const { data: idData } = await supabase.rpc('generate_trip_id')
-    const tripId = idData ?? `RR-${Date.now()}`
+    const { data: idData, error: idError } = await supabase.rpc('generate_trip_id')
+    if (idError || !idData) {
+      showToast('Error al generar el folio del viaje')
+      setLoading(false)
+      return
+    }
+    const tripId = idData
 
     // Crear vehículo si no existe
- let vehicleId: string | null = null
-// Solo usar vehicle_id si es un UUID real (contiene guiones y tiene 36 chars)
-const isRealUUID = draft.vehicle.id &&
-  draft.vehicle.id.length === 36 &&
-  draft.vehicle.id.split('-').length === 5
+    let vehicleId: string | null = null
+    const isRealUUID = draft.vehicle.id &&
+      draft.vehicle.id.length === 36 &&
+      draft.vehicle.id.split('-').length === 5
 
-if (isRealUUID) {
-  vehicleId = draft.vehicle.id!
-} else {
-  const { data: veh } = await supabase
-    .from('vehicles')
-    .insert({
+    if (isRealUUID) {
+      vehicleId = draft.vehicle.id!
+    } else {
+      const { data: veh, error: vehicleError } = await supabase
+        .from('vehicles')
+        .insert({
           owner_id: user.id,
           alias: draft.vehicle.alias ?? `${draft.vehicle.brand} ${draft.vehicle.model}`,
           brand: draft.vehicle.brand,
@@ -68,31 +72,38 @@ if (isRealUUID) {
         })
         .select('id')
         .single()
+
+      if (vehicleError) {
+        showToast('Error al guardar el vehículo')
+        setLoading(false)
+        return
+      }
+
       vehicleId = veh?.id ?? null
     }
 
     // Crear viaje
-    const insertPayload: any = {
-  id: tripId,
-  status: 'solicitud_recibida',
-  service_type: draft.serviceType ?? 'personal',
-  user_id: user.id,
-  
-  vehicle_brand: draft.vehicle.brand,
-  vehicle_model: draft.vehicle.model,
-  vehicle_color: draft.vehicle.color,
-  vehicle_plates: draft.vehicle.plates,
-  origin_address: draft.origin.address,
-  destination_address: draft.destination.address,
-  origin_contact_name: draft.originContact.name,
-  origin_contact_phone: draft.originContact.phone,
-  dest_contact_name: draft.destinationContact.name,
-  dest_contact_phone: draft.destinationContact.phone,
-  asap: Boolean(draft.asap),
-  distance_km: distanceKm,
-  client_price_mxn: price,
-  driver_pay_mxn: driverPay,
-}
+    const insertPayload: Record<string, unknown> = {
+      id: tripId,
+      status: 'solicitud_recibida',
+      service_type: draft.serviceType ?? 'personal',
+      user_id: user.id,
+      vehicle_id: vehicleId,
+      vehicle_brand: draft.vehicle.brand,
+      vehicle_model: draft.vehicle.model,
+      vehicle_color: draft.vehicle.color,
+      vehicle_plates: draft.vehicle.plates,
+      origin_address: draft.origin.address,
+      destination_address: draft.destination.address,
+      origin_contact_name: draft.originContact.name,
+      origin_contact_phone: draft.originContact.phone,
+      dest_contact_name: draft.destinationContact.name,
+      dest_contact_phone: draft.destinationContact.phone,
+      asap: Boolean(draft.asap),
+      distance_km: distanceKm,
+      client_price_mxn: price,
+      driver_pay_mxn: driverPay,
+    }
 
 // Agregar campos opcionales solo si tienen valor
 if (draft.vehicle.year) insertPayload.vehicle_year = Number(draft.vehicle.year)
@@ -105,9 +116,7 @@ if (draft.destination.reference) insertPayload.destination_reference = draft.des
 if (draft.scheduledAt) insertPayload.scheduled_at = draft.scheduledAt
 if (draft.specialInstructions) insertPayload.special_instructions = draft.specialInstructions
 
-console.log('INSERT PAYLOAD:', JSON.stringify(insertPayload, null, 2))
-const { error: tripError } = await supabase.from('trips').insert(insertPayload)
-console.log('TRIP ERROR:', tripError)
+    const { error: tripError } = await supabase.from('trips').insert(insertPayload)
 
     if (tripError) {
       showToast('Error al crear la solicitud')

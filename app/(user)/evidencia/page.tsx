@@ -1,18 +1,148 @@
 'use client'
-import { useState } from 'react'
-import { mockTrips } from '@/lib/mock-data'
+import { useEffect, useState } from 'react'
 import { Chip } from '@/components/ui/Chip'
+import { useAuthStore } from '@/lib/store'
+import { createClient } from '@/lib/supabase'
+
+interface EvidencePhoto {
+  url: string
+}
+
+interface TripEvidence {
+  id: string
+  type: 'inicial' | 'durante' | 'final'
+  status: string
+  km_reading: number | null
+  fuel_level: number | null
+  notes: string | null
+  created_at: string
+  evidence_photos: EvidencePhoto[] | null
+}
+
+interface EvidenceTrip {
+  id: string
+  status: string
+  vehicle_brand: string | null
+  vehicle_model: string | null
+  vehicle_plates: string | null
+  origin_address: string | null
+  destination_address: string | null
+  evidence: TripEvidence[] | null
+}
+
+function EvidenceCard({
+  title,
+  evidence,
+  pendingText,
+}: {
+  title: string
+  evidence?: TripEvidence
+  pendingText: string
+}) {
+  const photos = evidence?.evidence_photos ?? []
+
+  return (
+    <section>
+      <div className="section-head" style={{ marginBottom: 10 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700 }}>{title}</h2>
+        {evidence ? <Chip variant="success">Disponible</Chip> : <Chip variant="default">Pendiente</Chip>}
+      </div>
+      {evidence ? (
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {photos.length > 0 ? (
+            <div className="evidence-grid">
+              {photos.map(photo => (
+                <div
+                  key={photo.url}
+                  className="evidence-thumb"
+                  style={{
+                    backgroundImage: `url(${photo.url})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="evidence-grid">
+              <div className="evidence-thumb">📷</div>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 16, fontSize: 13, flexWrap: 'wrap' }}>
+            {evidence.km_reading !== null && <span><strong>{evidence.km_reading.toLocaleString('es-MX')}</strong> km</span>}
+            {evidence.fuel_level !== null && <span><strong>{evidence.fuel_level}%</strong> combustible</span>}
+            <span>{new Date(evidence.created_at).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+          </div>
+          {evidence.notes && <p className="muted">{evidence.notes}</p>}
+        </div>
+      ) : (
+        <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
+          <p className="muted">{pendingText}</p>
+        </div>
+      )}
+    </section>
+  )
+}
 
 export default function EvidenciaPage() {
-  const [selected, setSelected] = useState<string | null>(
-    mockTrips.length > 0 ? mockTrips[0].id : null
+  const { user } = useAuthStore()
+  const [selected, setSelected] = useState<string | null>(null)
+  const [trips, setTrips] = useState<EvidenceTrip[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) return
+    const userId = user.id
+    let cancelled = false
+
+    async function loadEvidence() {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('trips')
+        .select(`
+          id,
+          status,
+          vehicle_brand,
+          vehicle_model,
+          vehicle_plates,
+          origin_address,
+          destination_address,
+          evidence (
+            id,
+            type,
+            status,
+            km_reading,
+            fuel_level,
+            notes,
+            created_at,
+            evidence_photos (url)
+          )
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      if (cancelled) return
+      const rows = (data ?? []) as EvidenceTrip[]
+      setTrips(rows)
+      setSelected(current => current ?? rows[0]?.id ?? null)
+      setLoading(false)
+    }
+
+    void loadEvidence()
+    return () => { cancelled = true }
+  }, [user])
+
+  const trip = trips.find(t => t.id === selected) ?? null
+  const inicial = trip?.evidence?.find(e => e.type === 'inicial')
+  const final = trip?.evidence?.find(e => e.type === 'final')
+
+  if (loading) return (
+    <div className="card" style={{ textAlign: 'center', padding: '40px 16px' }}>
+      <p className="muted">Cargando evidencia…</p>
+    </div>
   )
-  const trip = mockTrips.find(t => t.id === selected) ?? null
 
-  const inicial = trip?.evidence.find(e => e.type === 'inicial')
-  const final   = trip?.evidence.find(e => e.type === 'final')
-
-  if (mockTrips.length === 0) return (
+  if (trips.length === 0) return (
     <div className="card" style={{ textAlign: 'center', padding: '40px 16px' }}>
       <p style={{ fontSize: 32, marginBottom: 8 }}>📸</p>
       <p style={{ fontWeight: 600, marginBottom: 4 }}>Sin evidencia disponible</p>
@@ -22,11 +152,10 @@ export default function EvidenciaPage() {
 
   return (
     <>
-      {/* Selector de viaje */}
       <section>
         <p className="kicker" style={{ marginBottom: 8 }}>Selecciona un viaje</p>
         <div className="stack">
-          {mockTrips.map(t => (
+          {trips.map(t => (
             <button key={t.id}
               onClick={() => setSelected(t.id)}
               style={{
@@ -37,9 +166,11 @@ export default function EvidenciaPage() {
                 cursor: 'pointer', color: 'var(--text)', width: '100%', textAlign: 'left',
               }}>
               <div>
-                <p style={{ fontWeight: 600, fontSize: 13 }}>{t.id} · {t.vehicle.alias}</p>
+                <p style={{ fontWeight: 600, fontSize: 13 }}>
+                  {t.id} · {t.vehicle_brand} {t.vehicle_model}
+                </p>
                 <p className="muted" style={{ fontSize: 12 }}>
-                  {t.origin.address.split(',')[0]} → {t.destination.address.split(',')[0]}
+                  {t.origin_address?.split(',')[0]} → {t.destination_address?.split(',')[0]}
                 </p>
               </div>
               <Chip status={t.status} />
@@ -48,59 +179,19 @@ export default function EvidenciaPage() {
         </div>
       </section>
 
-      {/* Evidencia inicial */}
       {trip && (
         <>
-          <section>
-            <div className="section-head" style={{ marginBottom: 10 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700 }}>Evidencia inicial</h2>
-              {inicial ? <Chip variant="success">Disponible</Chip> : <Chip variant="default">Pendiente</Chip>}
-            </div>
-            {inicial ? (
-              <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div className="evidence-grid">
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="evidence-thumb">📷</div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
-                  {inicial.kmReading && <span><strong>{inicial.kmReading.toLocaleString('es-MX')}</strong> km</span>}
-                  {inicial.fuelLevel && <span><strong>{inicial.fuelLevel}%</strong> combustible</span>}
-                </div>
-                {inicial.notes && <p className="muted">{inicial.notes}</p>}
-              </div>
-            ) : (
-              <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
-                <p className="muted">Disponible cuando el conductor reciba el vehículo.</p>
-              </div>
-            )}
-          </section>
+          <EvidenceCard
+            title="Evidencia inicial"
+            evidence={inicial}
+            pendingText="Disponible cuando el conductor reciba el vehículo."
+          />
 
-          {/* Evidencia final */}
-          <section>
-            <div className="section-head" style={{ marginBottom: 10 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700 }}>Evidencia final</h2>
-              {final ? <Chip variant="success">Disponible</Chip> : <Chip variant="default">Pendiente</Chip>}
-            </div>
-            {final ? (
-              <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div className="evidence-grid">
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="evidence-thumb">📷</div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
-                  {final.kmReading && <span><strong>{final.kmReading.toLocaleString('es-MX')}</strong> km</span>}
-                  {final.fuelLevel && <span><strong>{final.fuelLevel}%</strong> combustible</span>}
-                </div>
-                {final.notes && <p className="muted">{final.notes}</p>}
-              </div>
-            ) : (
-              <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
-                <p className="muted">Disponible al completar la entrega.</p>
-              </div>
-            )}
-          </section>
+          <EvidenceCard
+            title="Evidencia final"
+            evidence={final}
+            pendingText="Disponible al completar la entrega."
+          />
         </>
       )}
 

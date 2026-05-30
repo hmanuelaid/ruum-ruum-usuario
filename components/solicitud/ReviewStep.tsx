@@ -67,36 +67,39 @@ export default function ReviewStep() {
     }
 
     // Crear viaje
-    const { error: tripError } = await supabase.from('trips').insert({
-      id: tripId,
-      status: 'solicitud_recibida',
-      service_type: draft.serviceType ?? 'personal',
-      user_id: user.id,
-      vehicle_id: vehicleId,
-      vehicle_brand: draft.vehicle.brand,
-      vehicle_model: draft.vehicle.model,
-      vehicle_year: draft.vehicle.year ? Number(draft.vehicle.year) : null,
-      vehicle_color: draft.vehicle.color,
-      vehicle_plates: draft.vehicle.plates,
-      vehicle_vin: draft.vehicle.vin,
-      vehicle_type: draft.vehicle.type,
-      vehicle_transmission: draft.vehicle.transmission,
-      vehicle_condition: draft.vehicle.condition,
-      origin_address: draft.origin.address,
-      origin_reference: draft.origin.reference,
-      destination_address: draft.destination.address,
-      destination_reference: draft.destination.reference,
-      origin_contact_name: draft.originContact.name,
-      origin_contact_phone: draft.originContact.phone,
-      dest_contact_name: draft.destinationContact.name,
-      dest_contact_phone: draft.destinationContact.phone,
-      scheduled_at: draft.scheduledAt ?? null,
-      asap: draft.asap,
-      distance_km: distanceKm,
-      client_price_mxn: price,
-      driver_pay_mxn: driverPay,
-      special_instructions: draft.specialInstructions,
-    })
+    const insertPayload = {
+  id: tripId,
+  status: 'solicitud_recibida',
+  service_type: draft.serviceType ?? 'personal',
+  user_id: user.id,
+  vehicle_id: vehicleId,
+  vehicle_brand: draft.vehicle.brand,
+  vehicle_model: draft.vehicle.model,
+  vehicle_year: draft.vehicle.year ? Number(draft.vehicle.year) : null,
+  vehicle_color: draft.vehicle.color,
+  vehicle_plates: draft.vehicle.plates,
+  vehicle_vin: draft.vehicle.vin,
+  vehicle_type: draft.vehicle.type,
+  vehicle_transmission: draft.vehicle.transmission,
+  vehicle_condition: draft.vehicle.condition,
+  origin_address: draft.origin.address,
+  origin_reference: draft.origin.reference,
+  destination_address: draft.destination.address,
+  destination_reference: draft.destination.reference,
+  origin_contact_name: draft.originContact.name,
+  origin_contact_phone: draft.originContact.phone,
+  dest_contact_name: draft.destinationContact.name,
+  dest_contact_phone: draft.destinationContact.phone,
+  scheduled_at: draft.scheduledAt ?? null,
+  asap: draft.asap,
+  distance_km: distanceKm,
+  client_price_mxn: price,
+  driver_pay_mxn: driverPay,
+  special_instructions: draft.specialInstructions,
+}
+console.log('INSERT PAYLOAD:', JSON.stringify(insertPayload, null, 2))
+const { error: tripError } = await supabase.from('trips').insert(insertPayload)
+console.log('TRIP ERROR:', tripError)
 
     if (tripError) {
       showToast('Error al crear la solicitud')

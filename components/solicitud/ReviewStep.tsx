@@ -42,10 +42,11 @@ export default function ReviewStep() {
     const tripId = idData ?? `RR-${Date.now()}`
 
     // Crear vehículo si no existe
-    let vehicleId: string | null = null
-    if (draft.vehicle.id) {
-      vehicleId = draft.vehicle.id
-    } else {
+   let vehicleId: string | null = null
+const isMockId = draft.vehicle.id && !draft.vehicle.id.includes('-')
+if (draft.vehicle.id && !isMockId) {
+  vehicleId = draft.vehicle.id
+} else {
       const { data: veh } = await supabase
         .from('vehicles')
         .insert({

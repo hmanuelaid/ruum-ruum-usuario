@@ -1,88 +1,104 @@
 'use client'
-import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
 import { useAppStore } from '@/lib/store'
-import { createClient } from '@/lib/supabase'
+import { useDocuments } from '@/lib/useDocuments'
+import { DocumentUploader } from '@/components/ui/DocumentUploader'
 
-const DOCS = [
-  { id: 'ine',         label: 'Identificación oficial (INE)', required: true },
-  { id: 'comprobante', label: 'Comprobante de domicilio',     required: true },
-  { id: 'foto',        label: 'Foto de perfil',               required: false },
+const USER_DOCS = [
+  { docType: 'ine',          label: 'Identificación oficial (INE/Pasaporte)', required: true  },
+  { docType: 'comprobante',  label: 'Comprobante de domicilio',               required: true  },
+  { docType: 'foto_perfil',  label: 'Foto de perfil',                         required: false },
 ]
 
 export default function DocumentosPage() {
   const router = useRouter()
-  const { setUser, completeOnboarding } = useAuthStore()
+  const { user, completeOnboarding } = useAuthStore()
   const { showToast } = useAppStore()
-  const [uploaded, setUploaded] = useState<Record<string, boolean>>({})
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
 
-  const requiredDone = DOCS.filter(d => d.required).every(d => uploaded[d.id])
+  const ownerId   = user?.id ?? 'temp_user'
+  const ownerName = user?.name ?? 'Usuario'
+
+  const { docs, loading, updateDoc } = useDocuments(ownerId, USER_DOCS)
+
+  const requiredDone = docs
+    .filter(d => d.required)
+    .every(d => d.status === 'en_revision' || d.status === 'aprobado')
 
   async function handleFinish() {
-    setSubmitting(true); setError('')
-    const supabase = createClient()
-    const raw = typeof window !== 'undefined' ? sessionStorage.getItem('reg_data') : null
-    const reg = raw ? JSON.parse(raw) : {}
-
-    // 1. Crear usuario en Supabase Auth
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email: reg.email ?? '',
-      password: reg.password,
-    })
-
-    if (signUpError) { setError(signUpError.message); setSubmitting(false); return }
-
-    // 2. Crear perfil en app_users
-    const { data: profile, error: profileError } = await supabase
-      .from('app_users')
-      .insert({
-        auth_id: authData.user?.id,
-        name: reg.name,
-        email: reg.email ?? '',
-        phone: reg.phone,
-        type: 'personal',
-        status: 'activo',
-      })
-      .select()
-      .single()
-
-    if (profileError) { setError('Error al crear perfil'); setSubmitting(false); return }
-
-    setUser({ id: profile.id, name: profile.name, phone: profile.phone, email: profile.email })
     completeOnboarding()
-    showToast('¡Registro completado!')
+    showToast('¡Documentos enviados! Los revisamos en menos de 24 h.')
     router.replace('/inicio')
   }
 
   return (
     <div className="onboarding-shell">
       <button className="btn-back" onClick={() => router.back()}>← Atrás</button>
-      <div className="onboarding-card">
+
+      <div className="onboarding-card" style={{ gap: '1.25rem' }}>
         <div className="step-badge">Paso 3 de 3</div>
-        <h1 className="onboarding-title">Verifica tu identidad</h1>
-        <p className="onboarding-sub">Los revisamos en menos de 24 h.</p>
-        <div className="doc-list">
-          {DOCS.map(doc => (
-            <div key={doc.id}
-              className={`doc-row${uploaded[doc.id] ? ' doc-done' : ''}`}
-              onClick={() => setUploaded(u => ({ ...u, [doc.id]: !u[doc.id] }))}>
-              <span className="doc-icon">{uploaded[doc.id] ? '✓' : '↑'}</span>
-              <span className="doc-label">{doc.label}</span>
-              {!doc.required && <span className="doc-opt">Opcional</span>}
-            </div>
-          ))}
+
+        <div>
+          <h1 className="onboarding-title">Verifica tu identidad</h1>
+          <p className="onboarding-sub">
+            Sube tus documentos. Los revisamos en menos de 24 horas y te notificamos el resultado.
+          </p>
         </div>
-        {error && <p className="field-error">{error}</p>}
-        <button className="btn-primary"
-          disabled={!requiredDone || submitting} onClick={handleFinish}>
-          {submitting ? 'Creando cuenta…' : 'Finalizar registro'}
-        </button>
-        {!requiredDone && (
-          <p className="field-error">Sube los documentos obligatorios para continuar</p>
+
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
+            <p className="muted">Cargando documentos…</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {docs.map(doc => (
+              <DocumentUploader
+                key={doc.docType}
+                doc={doc}
+                ownerId={ownerId}
+                ownerType="user"
+                ownerName={ownerName}
+                onUploaded={updateDoc}
+              />
+            ))}
+          </div>
         )}
+
+        {/* Progreso */}
+        {!loading && (
+          <div style={{
+            background: 'var(--surface-2)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '12px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: 13,
+          }}>
+            <span className="muted">Documentos subidos</span>
+            <strong style={{ color: requiredDone ? 'var(--success)' : 'var(--text)' }}>
+              {docs.filter(d => d.status !== 'pendiente_carga').length} / {docs.filter(d => d.required).length} obligatorios
+            </strong>
+          </div>
+        )}
+
+        <button
+          className="btn-primary"
+          disabled={!requiredDone}
+          onClick={handleFinish}
+        >
+          Finalizar registro →
+        </button>
+
+        {!requiredDone && (
+          <p className="field-error" style={{ textAlign: 'center' }}>
+            Sube los documentos obligatorios para continuar
+          </p>
+        )}
+
+        <button className="btn-ghost" onClick={handleFinish}>
+          Completar más tarde
+        </button>
       </div>
     </div>
   )

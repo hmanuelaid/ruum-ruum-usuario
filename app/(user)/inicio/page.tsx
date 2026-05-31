@@ -1,30 +1,65 @@
 'use client'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/store'
-import { useAppStore } from '@/lib/store'
 import { Chip } from '@/components/ui/Chip'
-import { mockTrips } from '@/lib/mock-data'
+import { createClient } from '@/lib/supabase'
 
 const STATUS_LABELS: Record<string, string> = {
-  solicitud_recibida:  'Solicitud recibida',
-  en_revision:         'En revisión',
-  conductor_asignado:  'Conductor asignado',
-  en_camino_origen:    'En camino al origen',
-  recoleccion_proceso: 'Recolección en proceso',
-  vehiculo_documentado:'Vehículo documentado',
-  traslado_curso:      'Traslado en curso',
-  llegando_destino:    'Llegando a destino',
-  entrega_proceso:     'Entrega en proceso',
-  finalizado:          'Finalizado',
-  cancelado:           'Cancelado',
-  incidente:           'En revisión por incidente',
+  solicitud_recibida: 'Solicitud recibida', pendiente_revision: 'En revisión',
+  pendiente_asignacion: 'Sin conductor', conductor_asignado: 'Conductor asignado',
+  conductor_en_camino: 'En camino', recoleccion_proceso: 'Recolección',
+  traslado_curso: 'En curso', entrega_proceso: 'Entrega',
+  finalizado: 'Finalizado', cancelado: 'Cancelado', incidente: 'Incidente',
+}
+
+const ACTIVE_STATUSES = [
+  'solicitud_recibida','pendiente_revision','pendiente_asignacion',
+  'conductor_asignado','conductor_en_camino','recoleccion_proceso',
+  'evidencia_inicial_pendiente','traslado_curso','entrega_proceso','evidencia_final_pendiente',
+]
+
+interface Trip {
+  id: string
+  status: string
+  vehicle_brand: string | null
+  vehicle_model: string | null
+  vehicle_plates: string | null
+  origin_address: string | null
+  destination_address: string | null
+  client_price_mxn: number | null
+  driver_id: string | null
+  created_at: string
 }
 
 export default function InicioPage() {
   const { user } = useAuthStore()
-  const { setActiveTrip } = useAppStore()
-  const activeTrip = mockTrips.find(t => t.status === 'traslado_curso')
-  const recentTrips = mockTrips.slice(0, 3)
+  const [activeTrip, setActiveTrip] = useState<Trip | null>(null)
+  const [recentTrips, setRecentTrips] = useState<Trip[]>([])
+  const [totalTrips, setTotalTrips] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) return
+    loadData()
+  }, [user])
+
+  async function loadData() {
+    const supabase = createClient()
+    const { data: trips } = await supabase
+      .from('trips')
+      .select('*')
+      .eq('user_id', user!.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+
+    const all = (trips ?? []) as Trip[]
+    const active = all.find(t => ACTIVE_STATUSES.includes(t.status)) ?? null
+    setActiveTrip(active)
+    setRecentTrips(all.slice(0, 3))
+    setTotalTrips(all.length)
+    setLoading(false)
+  }
 
   return (
     <>
@@ -49,25 +84,24 @@ export default function InicioPage() {
       </div>
 
       {/* Viaje activo */}
-      {activeTrip && (
+      {!loading && activeTrip && (
         <section>
           <div className="section-head">
             <h2 style={{ fontSize: 15, fontWeight: 700 }}>Viaje activo</h2>
             <Chip variant="accent">En curso</Chip>
           </div>
-          <article className="list-card accent-left" onClick={() => setActiveTrip(activeTrip)}>
+          <article className="list-card accent-left">
             <div style={{ flex: 1 }}>
-              <p className="kicker">{activeTrip.id} · {activeTrip.vehicle.alias}</p>
+              <p className="kicker">{activeTrip.id} · {activeTrip.vehicle_brand} {activeTrip.vehicle_model}</p>
               <p style={{ fontWeight: 600, fontSize: 14, margin: '4px 0' }}>
-                {activeTrip.origin.address.split(',')[0]} → {activeTrip.destination.address.split(',')[0]}
+                {activeTrip.origin_address?.split(',')[0]} → {activeTrip.destination_address?.split(',')[0]}
               </p>
-              <p className="muted">{STATUS_LABELS[activeTrip.status]}</p>
+              <p className="muted">{STATUS_LABELS[activeTrip.status] ?? activeTrip.status}</p>
+              {activeTrip.driver_id
+                ? <p style={{ fontSize: 12, color: 'var(--success)', marginTop: 4 }}>✓ Conductor asignado</p>
+                : <p style={{ fontSize: 12, color: 'var(--warning)', marginTop: 4 }}>⏳ Buscando conductor…</p>}
             </div>
-            <button className="btn-mini" aria-label="Ver detalle">
-              <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18 15 12 9 6"/>
-              </svg>
-            </button>
+            <Chip status={activeTrip.status}>{STATUS_LABELS[activeTrip.status]}</Chip>
           </article>
         </section>
       )}
@@ -88,40 +122,74 @@ export default function InicioPage() {
             <div className="quick-action-icon">📸</div>
             <span style={{ fontSize: 13, fontWeight: 600 }}>Evidencia</span>
           </Link>
-          <Link href="/cuenta" className="quick-action">
+          <Link href="/soporte" className="quick-action">
             <div className="quick-action-icon">💬</div>
             <span style={{ fontSize: 13, fontWeight: 600 }}>Soporte</span>
           </Link>
         </div>
       </section>
 
+      {/* Métricas rápidas */}
+      {!loading && totalTrips > 0 && (
+        <div className="metric-grid">
+          <div className="metric-card">
+            <p className="value">{totalTrips}</p>
+            <p className="label">Viajes totales</p>
+          </div>
+          <div className="metric-card">
+            <p className="value">{recentTrips.filter(t => t.status === 'finalizado').length}</p>
+            <p className="label">Finalizados</p>
+          </div>
+        </div>
+      )}
+
       {/* Últimos viajes */}
-      <section>
-        <div className="section-head">
-          <h2 style={{ fontSize: 15, fontWeight: 700 }}>Últimos viajes</h2>
-          <Link href="/viajes"><button className="btn-text">Ver todos</button></Link>
+      {!loading && recentTrips.length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2 style={{ fontSize: 15, fontWeight: 700 }}>Últimos viajes</h2>
+            <Link href="/viajes"><button className="btn-text">Ver todos</button></Link>
+          </div>
+          <div className="stack">
+            {recentTrips.map(trip => (
+              <article key={trip.id} className="list-card">
+                <div style={{ flex: 1 }}>
+                  <p className="kicker">{trip.id}</p>
+                  <p style={{ fontWeight: 600, fontSize: 14, margin: '3px 0' }}>
+                    {trip.origin_address?.split(',')[0]} → {trip.destination_address?.split(',')[0]}
+                  </p>
+                  <p className="muted">
+                    ${Number(trip.client_price_mxn).toLocaleString('es-MX')}
+                  </p>
+                </div>
+                <Chip status={trip.status}>{STATUS_LABELS[trip.status]}</Chip>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Sin viajes aún */}
+      {!loading && totalTrips === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: '28px 16px' }}>
+          <p style={{ fontSize: 28, marginBottom: 8 }}>🚗</p>
+          <p style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Tu primer traslado te espera</p>
+          <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>
+            Solicita el traslado de tu vehículo con conductores certificados.
+          </p>
+          <Link href="/solicitar">
+            <button className="btn-primary">Solicitar ahora →</button>
+          </Link>
         </div>
-        <div className="stack">
-          {recentTrips.map(trip => (
-            <article key={trip.id} className="list-card">
-              <div style={{ flex: 1 }}>
-                <p className="kicker">{trip.id} · {trip.vehicle.alias}</p>
-                <p style={{ fontWeight: 600, fontSize: 14, margin: '3px 0' }}>
-                  {trip.origin.address.split(',')[0]} → {trip.destination.address.split(',')[0]}
-                </p>
-                <p className="muted">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(trip.priceEstimatedMXN)}</p>
-              </div>
-              <Chip status={trip.status}>{STATUS_LABELS[trip.status]}</Chip>
-            </article>
-          ))}
-        </div>
-      </section>
+      )}
 
       {/* Mensaje de confianza */}
       <div className="card" style={{ textAlign: 'center', padding: '20px 16px' }}>
         <p style={{ fontSize: 22, marginBottom: 8 }}>🛡️</p>
         <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Conductores certificados</p>
-        <p className="muted" style={{ fontSize: 13 }}>Cada traslado incluye evidencia fotográfica, seguimiento de ruta y soporte 24/7.</p>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Evidencia fotográfica, seguimiento de ruta y soporte 24/7.
+        </p>
       </div>
     </>
   )

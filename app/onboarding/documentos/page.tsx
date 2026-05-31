@@ -1,9 +1,11 @@
 'use client'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
 import { useAppStore } from '@/lib/store'
 import { useDocuments } from '@/lib/useDocuments'
 import { DocumentUploader } from '@/components/ui/DocumentUploader'
+import { createClient } from '@/lib/supabase'
 
 const USER_DOCS = [
   { docType: 'ine',          label: 'Identificación oficial (INE/Pasaporte)', required: true  },
@@ -13,13 +15,115 @@ const USER_DOCS = [
 
 export default function DocumentosPage() {
   const router = useRouter()
-  const { user, completeOnboarding } = useAuthStore()
+  const { user, setUser, completeOnboarding } = useAuthStore()
   const { showToast } = useAppStore()
+  const [profileLoading, setProfileLoading] = useState(!user)
+  const [profileError, setProfileError] = useState('')
 
-  const ownerId   = user?.id ?? 'temp_user'
+  const ownerId   = user?.id ?? null
   const ownerName = user?.name ?? 'Usuario'
 
   const { docs, loading, updateDoc } = useDocuments(ownerId, USER_DOCS)
+
+  useEffect(() => {
+    if (user) return
+
+    async function createUserProfile() {
+      setProfileLoading(true)
+      setProfileError('')
+
+      const raw = typeof window !== 'undefined' ? sessionStorage.getItem('reg_data') : null
+      const reg = raw ? JSON.parse(raw) as {
+        name?: string
+        phone?: string
+        email?: string
+        password?: string
+      } : null
+
+      if (!reg?.email || !reg.password || !reg.name) {
+        setProfileError('No encontramos los datos de registro. Vuelve a iniciar el registro.')
+        setProfileLoading(false)
+        return
+      }
+
+      const supabase = createClient()
+      let authId: string | undefined
+
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: reg.email,
+        password: reg.password,
+      })
+
+      if (signUpError) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: reg.email,
+          password: reg.password,
+        })
+
+        if (signInError) {
+          setProfileError(signUpError.message)
+          setProfileLoading(false)
+          return
+        }
+
+        authId = signInData.user.id
+      } else {
+        authId = signUpData.user?.id
+      }
+
+      if (!authId) {
+        setProfileError('No se pudo crear la sesion del usuario.')
+        setProfileLoading(false)
+        return
+      }
+
+      const { data: existingUser } = await supabase
+        .from('app_users')
+        .select('id, name, phone, email')
+        .eq('auth_id', authId)
+        .maybeSingle()
+
+      if (existingUser) {
+        setUser({
+          id: existingUser.id,
+          name: existingUser.name,
+          phone: existingUser.phone ?? '',
+          email: existingUser.email,
+        })
+        setProfileLoading(false)
+        return
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('app_users')
+        .insert({
+          auth_id: authId,
+          name: reg.name,
+          email: reg.email,
+          phone: reg.phone ?? '',
+          type: 'personal',
+          status: 'activo',
+        })
+        .select('id, name, phone, email')
+        .single()
+
+      if (profileError) {
+        setProfileError(`No se pudo crear el perfil de usuario: ${profileError.message}`)
+        setProfileLoading(false)
+        return
+      }
+
+      setUser({
+        id: profile.id,
+        name: profile.name,
+        phone: profile.phone ?? '',
+        email: profile.email,
+      })
+      setProfileLoading(false)
+    }
+
+    void createUserProfile()
+  }, [setUser, user])
 
   const requiredDone = docs
     .filter(d => d.required)
@@ -45,9 +149,28 @@ export default function DocumentosPage() {
           </p>
         </div>
 
-        {loading ? (
+        {profileError && (
+          <div style={{
+            background: 'rgba(239,68,68,.08)',
+            border: '1px solid rgba(239,68,68,.25)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '12px 14px',
+            fontSize: 13,
+            color: 'var(--danger)',
+          }}>
+            {profileError}
+          </div>
+        )}
+
+        {profileLoading || loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
-            <p className="muted">Cargando documentos…</p>
+            <p className="muted">
+              {profileLoading ? 'Preparando tu perfil…' : 'Cargando documentos…'}
+            </p>
+          </div>
+        ) : !ownerId ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
+            <p className="muted">Completa tu registro para subir documentos.</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -25,105 +25,12 @@ export default function DocumentosPage() {
 
   const { docs, loading, updateDoc } = useDocuments(ownerId, USER_DOCS)
 
-  useEffect(() => {
-    if (user) return
 
-    async function createUserProfile() {
-      setProfileLoading(true)
-      setProfileError('')
-
-      const raw = typeof window !== 'undefined' ? sessionStorage.getItem('reg_data') : null
-      const reg = raw ? JSON.parse(raw) as {
-        name?: string
-        phone?: string
-        email?: string
-        password?: string
-      } : null
-
-      if (!reg?.email || !reg.password || !reg.name) {
-        setProfileError('No encontramos los datos de registro. Vuelve a iniciar el registro.')
-        setProfileLoading(false)
-        return
-      }
-
-      const supabase = createClient()
-      let authId: string | undefined
-
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: reg.email,
-        password: reg.password,
-      })
-
-      if (signUpError) {
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: reg.email,
-          password: reg.password,
-        })
-
-        if (signInError) {
-          setProfileError(signUpError.message)
-          setProfileLoading(false)
-          return
-        }
-
-        authId = signInData.user.id
-      } else {
-        authId = signUpData.user?.id
-      }
-
-      if (!authId) {
-        setProfileError('No se pudo crear la sesion del usuario.')
-        setProfileLoading(false)
-        return
-      }
-
-      const { data: existingUser } = await supabase
-        .from('app_users')
-        .select('id, name, phone, email')
-        .eq('auth_id', authId)
-        .maybeSingle()
-
-      if (existingUser) {
-        setUser({
-          id: existingUser.id,
-          name: existingUser.name,
-          phone: existingUser.phone ?? '',
-          email: existingUser.email,
-        })
-        setProfileLoading(false)
-        return
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('app_users')
-        .insert({
-          auth_id: authId,
-          name: reg.name,
-          email: reg.email,
-          phone: reg.phone ?? '',
-          type: 'personal',
-          status: 'activo',
-        })
-        .select('id, name, phone, email')
-        .single()
-
-      if (profileError) {
-        setProfileError(`No se pudo crear el perfil de usuario: ${profileError.message}`)
-        setProfileLoading(false)
-        return
-      }
-
-      setUser({
-        id: profile.id,
-        name: profile.name,
-        phone: profile.phone ?? '',
-        email: profile.email,
-      })
-      setProfileLoading(false)
-    }
-
-    void createUserProfile()
-  }, [setUser, user])
+useEffect(() => {
+  if (!user) {
+    router.replace('/onboarding/registro')
+  }
+}, [user, router])
 
   const requiredDone = docs
     .filter(d => d.required)

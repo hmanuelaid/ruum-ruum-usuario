@@ -27,19 +27,30 @@ function timeAgo(iso: string) {
 export default function NotificacionesPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     fetch('/api/notifications')
       .then(r => r.json())
-      .then(d => { setNotifications(d.data); setLoading(false) })
+      .then(d => {
+        setNotifications(Array.isArray(d.data) ? d.data : [])
+        setError(d.ok === false ? d.error ?? 'No se pudieron cargar las notificaciones.' : '')
+        setLoading(false)
+      })
+      .catch(() => {
+        setNotifications([])
+        setError('No se pudieron cargar las notificaciones.')
+        setLoading(false)
+      })
   }, [])
 
   async function markRead(id: string) {
-    await fetch('/api/notifications', {
+    const response = await fetch('/api/notifications', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
+    if (!response.ok) return
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
   }
 
@@ -75,6 +86,8 @@ export default function NotificacionesPage() {
           </button>
         )}
       </div>
+
+      {error && <p className="field-error">{error}</p>}
 
       {notifications.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '40px 16px' }}>

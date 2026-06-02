@@ -1,14 +1,16 @@
 // ─── lib/mock-data.ts ─────────────────────────────────────────────────────────
 import type { Trip, Vehicle, User } from './types'
 
-export const mockUser: User = {
+export const DEMO_DATA_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === 'true'
+
+const demoUser: User = {
   id: 'usr_001',
   name: 'Carlos Mendoza',
   phone: '+52 55 1234 5678',
   email: 'carlos@ejemplo.com',
 }
 
-export const mockVehicles: Vehicle[] = [
+const demoVehicles: Vehicle[] = [
   {
     id: 'veh_001',
     alias: 'Mi camioneta',
@@ -35,6 +37,12 @@ export const mockVehicles: Vehicle[] = [
   },
 ]
 
+export const mockUser: User = DEMO_DATA_ENABLED
+  ? demoUser
+  : { id: '', name: '', phone: '', email: '' }
+
+export const mockVehicles: Vehicle[] = DEMO_DATA_ENABLED ? demoVehicles : []
+
 export const TIMELINE_STEPS = [
   'Solicitud creada',
   'Solicitud aceptada',
@@ -50,11 +58,11 @@ export const TIMELINE_STEPS = [
   'Viaje finalizado',
 ]
 
-export const mockTrips: Trip[] = [
+export const mockTrips: Trip[] = DEMO_DATA_ENABLED ? [
   {
     id: 'RR-2024-001',
     status: 'traslado_curso',
-    vehicle: mockVehicles[0],
+    vehicle: demoVehicles[0],
     origin: { address: 'Av. Insurgentes Sur 1234, CDMX', reference: 'Torre azul, entrada principal' },
     destination: { address: 'Blvd. Kukulcán Km 12, Cancún, QR', reference: 'Hotel Marriott' },
     originContact: { name: 'Carlos Mendoza', phone: '+52 55 1234 5678' },
@@ -92,7 +100,7 @@ export const mockTrips: Trip[] = [
   {
     id: 'RR-2024-002',
     status: 'finalizado',
-    vehicle: mockVehicles[1],
+    vehicle: demoVehicles[1],
     origin: { address: 'Periférico Sur 4000, CDMX' },
     destination: { address: 'Av. López Mateos 800, Guadalajara, JAL' },
     originContact: { name: 'Carlos Mendoza', phone: '+52 55 1234 5678' },
@@ -129,4 +137,4 @@ export const mockTrips: Trip[] = [
     ],
     createdAt: '2024-05-14T14:00:00',
   },
-]
+] : []

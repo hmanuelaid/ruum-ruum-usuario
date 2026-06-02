@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
 import { Chip } from '@/components/ui/Chip'
 import { createClient } from '@/lib/supabase'
@@ -34,20 +35,41 @@ interface Trip {
 
 export default function InicioPage() {
   const { user } = useAuthStore()
+  const router = useRouter()
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null)
   const [recentTrips, setRecentTrips] = useState<Trip[]>([])
   const [totalTrips, setTotalTrips] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      let cancelled = false
+
+      async function verifySession() {
+        const supabase = createClient()
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+
+        if (!cancelled && (authError || !authUser)) {
+          router.replace('/login?redirectTo=/inicio')
+        }
+      }
+
+      void verifySession()
+
+      return () => {
+        cancelled = true
+      }
+    }
 
     const userId = user.id
     let cancelled = false
 
     async function loadData() {
+      setLoading(true)
+      setError('')
       const supabase = createClient()
-      const { data: trips } = await supabase
+      const { data: trips, error: tripsError } = await supabase
         .from('trips')
         .select('*')
         .eq('user_id', userId)
@@ -55,6 +77,12 @@ export default function InicioPage() {
         .limit(10)
 
       if (cancelled) return
+
+      if (tripsError) {
+        setError(`No pudimos cargar tus viajes: ${tripsError.message}`)
+        setLoading(false)
+        return
+      }
 
       const all = (trips ?? []) as Trip[]
       const active = all.find(t => ACTIVE_STATUSES.includes(t.status)) ?? null
@@ -69,7 +97,7 @@ export default function InicioPage() {
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [router, user])
 
   return (
     <>
@@ -92,6 +120,12 @@ export default function InicioPage() {
           </button>
         </Link>
       </div>
+
+      {error && (
+        <div className="card" style={{ textAlign: 'center', padding: '16px' }}>
+          <p className="field-error">{error}</p>
+        </div>
+      )}
 
       {/* Viaje activo */}
       {!loading && activeTrip && (

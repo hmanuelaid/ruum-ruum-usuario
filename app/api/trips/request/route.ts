@@ -1,6 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import {
+  firstValidationError,
+  validateTripRequestPayload,
+} from '@/lib/validation/tripRequest'
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status })
@@ -38,8 +42,13 @@ export async function POST(request: Request) {
     return jsonError('Solicitud invalida.')
   }
 
+  const validation = validateTripRequestPayload(payload)
+  if (!validation.ok) {
+    return jsonError(firstValidationError(validation.errors))
+  }
+
   const { data, error } = await supabase.rpc('create_trip_request', {
-    request_payload: payload,
+    request_payload: validation.data,
   })
 
   if (error) {

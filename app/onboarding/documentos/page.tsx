@@ -21,7 +21,7 @@ export default function DocumentosPage() {
   const [profileError, setProfileError] = useState('')
 
   const ownerId   = user?.id ?? null
-  const { docs, loading, updateDoc } = useDocuments(ownerId, USER_DOCS)
+  const { docs, loading, error: documentsError, updateDoc } = useDocuments(ownerId, USER_DOCS)
 
   useEffect(() => {
     if (user) {
@@ -112,6 +112,19 @@ export default function DocumentosPage() {
             color: 'var(--danger)',
           }}>
             {profileError}
+          </div>
+        )}
+
+        {documentsError && (
+          <div style={{
+            background: 'rgba(239,68,68,.08)',
+            border: '1px solid rgba(239,68,68,.25)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '12px 14px',
+            fontSize: 13,
+            color: 'var(--danger)',
+          }}>
+            {documentsError}
           </div>
         )}
 

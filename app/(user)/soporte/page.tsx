@@ -13,13 +13,32 @@ const FAQS = [
 export default function SoportePage() {
   const { showToast } = useAppStore()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
+  const [type, setType] = useState('problema_viaje')
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
 
   async function handleSend() {
     if (!message.trim()) return
     setSending(true)
-    await new Promise(r => setTimeout(r, 800))
+    setError('')
+
+    const response = await fetch('/api/support', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, message }),
+    })
+    const payload = await response.json().catch(() => null) as {
+      ok?: boolean
+      error?: string
+    } | null
+
+    if (!response.ok || !payload?.ok) {
+      setError(payload?.error ?? 'No pudimos enviar tu mensaje.')
+      setSending(false)
+      return
+    }
+
     setSending(false)
     setMessage('')
     showToast('Mensaje enviado. Te respondemos en menos de 2 horas.')
@@ -61,13 +80,13 @@ export default function SoportePage() {
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="field-group">
             <label className="field-label">Tipo de problema</label>
-            <select className="field-select">
-              <option>Problema con un viaje</option>
-              <option>Daño o incidente</option>
-              <option>Ayuda con pagos</option>
-              <option>Ayuda con evidencia</option>
-              <option>Cancelaciones</option>
-              <option>Otro</option>
+            <select className="field-select" value={type} onChange={e => setType(e.target.value)}>
+              <option value="problema_viaje">Problema con un viaje</option>
+              <option value="incidente">Daño o incidente</option>
+              <option value="pagos">Ayuda con pagos</option>
+              <option value="evidencia">Ayuda con evidencia</option>
+              <option value="cancelaciones">Cancelaciones</option>
+              <option value="otro">Otro</option>
             </select>
           </div>
           <div className="field-group">
@@ -78,6 +97,7 @@ export default function SoportePage() {
               onChange={e => setMessage(e.target.value)}
               style={{ resize: 'none' }} />
           </div>
+          {error && <p className="field-error">{error}</p>}
           <button className="btn-primary" onClick={handleSend} disabled={sending || !message.trim()}>
             {sending ? 'Enviando...' : 'Enviar mensaje'}
           </button>

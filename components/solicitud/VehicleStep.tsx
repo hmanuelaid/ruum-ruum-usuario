@@ -1,7 +1,13 @@
 'use client'
+import { useEffect, useState } from 'react'
 import { useWizardStore } from '@/lib/store'
-import { mockVehicles } from '@/lib/mock-data'
-import type { VehicleType, TransmissionType } from '@/lib/types'
+import type { Vehicle, VehicleType, TransmissionType } from '@/lib/types'
+import {
+  normalizePlates,
+  normalizeVin,
+  validateVehicleInput,
+  type FieldErrors,
+} from '@/lib/validation/tripRequest'
 
 const VEHICLE_TYPES: { value: VehicleType; label: string; emoji: string }[] = [
   { value: 'sedan',  label: 'Sedán',    emoji: '🚗' },
@@ -14,44 +20,117 @@ const VEHICLE_TYPES: { value: VehicleType; label: string; emoji: string }[] = [
 
 export default function VehicleStep() {
   const { draft, updateDraft, setStep } = useWizardStore()
+  const [savedVehicles, setSavedVehicles] = useState<Vehicle[]>([])
+  const [loadingVehicles, setLoadingVehicles] = useState(true)
+  const [vehiclesError, setVehiclesError] = useState('')
+  const [errors, setErrors] = useState<FieldErrors>({})
   const v = draft.vehicle
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadVehicles() {
+      const response = await fetch('/api/vehicles')
+      const payload = await response.json().catch(() => null) as {
+        ok?: boolean
+        data?: Vehicle[]
+        error?: string
+      } | null
+
+      if (cancelled) return
+
+      if (!response.ok || !payload?.ok || !Array.isArray(payload.data)) {
+        setSavedVehicles([])
+        setVehiclesError(payload?.error ?? 'No pudimos cargar tus vehículos.')
+        setLoadingVehicles(false)
+        return
+      }
+
+      setSavedVehicles(payload.data)
+      setVehiclesError('')
+      setLoadingVehicles(false)
+    }
+
+    void loadVehicles()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function clearError(field: string) {
+    const key = `vehicle.${field}`
+    setErrors(prev => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
   function update(field: string, value: string) {
+    clearError(field)
     updateDraft({ vehicle: { ...draft.vehicle, [field]: value } })
   }
 
   function loadSaved(id: string) {
-    const found = mockVehicles.find(v => v.id === id)
-    if (found) updateDraft({ vehicle: found })
+    const found = savedVehicles.find(v => v.id === id)
+    if (found) {
+      setErrors({})
+      updateDraft({ vehicle: found })
+    }
   }
 
-  const canContinue = v.brand && v.model && v.year && v.plates && v.type && v.transmission
+  function handleContinue() {
+    const result = validateVehicleInput(v)
+    if (!result.ok) {
+      setErrors(Object.fromEntries(
+        Object.entries(result.errors).map(([field, message]) => [`vehicle.${field}`, message]),
+      ))
+      return
+    }
+
+    setErrors({})
+    updateDraft({ vehicle: { ...draft.vehicle, ...result.data } })
+    setStep(2)
+  }
+
+  const canContinue = Boolean(v.brand && v.model && v.year && v.plates && v.type && v.transmission)
+  const errorFor = (field: string) => errors[`vehicle.${field}`]
 
   return (
     <div className="form-section">
       {/* Vehículos guardados */}
-      {mockVehicles.length > 0 && (
+      {(loadingVehicles || vehiclesError || savedVehicles.length > 0) && (
         <section>
           <p className="field-label" style={{ marginBottom: 8 }}>Usar un vehículo guardado</p>
-          <div className="stack">
-            {mockVehicles.map(sv => (
-              <button key={sv.id}
-                onClick={() => loadSaved(sv.id)}
-                style={{
-                  background: draft.vehicle.id === sv.id ? 'var(--primary-dim)' : 'var(--surface-2)',
-                  border: `1px solid ${draft.vehicle.id === sv.id ? 'var(--primary)' : 'var(--border)'}`,
-                  borderRadius: 'var(--radius-sm)', padding: '10px 14px',
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  cursor: 'pointer', color: 'var(--text)', width: '100%', textAlign: 'left',
-                }}>
-                <span style={{ fontSize: '1.3rem' }}>🚗</span>
-                <div>
-                  <p style={{ fontWeight: 600, fontSize: 13 }}>{sv.alias}</p>
-                  <p className="muted" style={{ fontSize: 12 }}>{sv.brand} {sv.model} · {sv.plates}</p>
-                </div>
-              </button>
-            ))}
-          </div>
+          {loadingVehicles ? (
+            <div className="card" style={{ padding: '12px 14px' }}>
+              <p className="muted">Cargando vehículos…</p>
+            </div>
+          ) : vehiclesError ? (
+            <p className="field-error">{vehiclesError}</p>
+          ) : (
+            <div className="stack">
+              {savedVehicles.map(sv => (
+                <button key={sv.id}
+                  onClick={() => loadSaved(sv.id)}
+                  style={{
+                    background: draft.vehicle.id === sv.id ? 'var(--primary-dim)' : 'var(--surface-2)',
+                    border: `1px solid ${draft.vehicle.id === sv.id ? 'var(--primary)' : 'var(--border)'}`,
+                    borderRadius: 'var(--radius-sm)', padding: '10px 14px',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    cursor: 'pointer', color: 'var(--text)', width: '100%', textAlign: 'left',
+                  }}>
+                  <span style={{ fontSize: '1.3rem' }}>🚗</span>
+                  <div>
+                    <p style={{ fontWeight: 600, fontSize: 13 }}>{sv.alias}</p>
+                    <p className="muted" style={{ fontSize: 12 }}>{sv.brand} {sv.model} · {sv.plates}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '12px 0' }}>
             <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
             <span className="muted" style={{ fontSize: 12 }}>o ingresa manualmente</span>
@@ -79,6 +158,7 @@ export default function VehicleStep() {
             </button>
           ))}
         </div>
+        {errorFor('type') && <p className="field-error">{errorFor('type')}</p>}
       </div>
 
       {/* Datos básicos */}
@@ -87,37 +167,53 @@ export default function VehicleStep() {
           <label className="field-label">Marca</label>
           <input className="field-input" placeholder="Toyota"
             value={v.brand ?? ''} onChange={e => update('brand', e.target.value)} />
+          {errorFor('brand') && <p className="field-error">{errorFor('brand')}</p>}
         </div>
         <div className="field-group">
           <label className="field-label">Modelo</label>
           <input className="field-input" placeholder="Hilux"
             value={v.model ?? ''} onChange={e => update('model', e.target.value)} />
+          {errorFor('model') && <p className="field-error">{errorFor('model')}</p>}
         </div>
       </div>
 
       <div className="field-row">
         <div className="field-group">
           <label className="field-label">Año</label>
-          <input className="field-input" placeholder="2022" type="number"
+          <input className="field-input" placeholder="2022" type="number" min="1900"
             value={v.year ?? ''} onChange={e => update('year', e.target.value)} />
+          {errorFor('year') && <p className="field-error">{errorFor('year')}</p>}
         </div>
         <div className="field-group">
           <label className="field-label">Color</label>
           <input className="field-input" placeholder="Blanco"
             value={v.color ?? ''} onChange={e => update('color', e.target.value)} />
+          {errorFor('color') && <p className="field-error">{errorFor('color')}</p>}
         </div>
       </div>
 
       <div className="field-row">
         <div className="field-group">
           <label className="field-label">Placas</label>
-          <input className="field-input" placeholder="ABC-123"
-            value={v.plates ?? ''} onChange={e => update('plates', e.target.value)} />
+          <input className="field-input" placeholder="ABC123" maxLength={10}
+            value={v.plates ?? ''}
+            onChange={e => update('plates', e.target.value.toUpperCase())}
+            onBlur={e => {
+              const plates = normalizePlates(e.currentTarget.value)
+              if (plates) update('plates', plates)
+            }} />
+          {errorFor('plates') && <p className="field-error">{errorFor('plates')}</p>}
         </div>
         <div className="field-group">
           <label className="field-label">VIN (opcional)</label>
-          <input className="field-input" placeholder="1HGBH41..."
-            value={v.vin ?? ''} onChange={e => update('vin', e.target.value)} />
+          <input className="field-input" placeholder="1HGBH41JXMN109186" maxLength={20}
+            value={v.vin ?? ''}
+            onChange={e => update('vin', e.target.value.toUpperCase())}
+            onBlur={e => {
+              const vin = normalizeVin(e.currentTarget.value)
+              if (vin) update('vin', vin)
+            }} />
+          {errorFor('vin') && <p className="field-error">{errorFor('vin')}</p>}
         </div>
       </div>
 
@@ -139,6 +235,7 @@ export default function VehicleStep() {
             </button>
           ))}
         </div>
+        {errorFor('transmission') && <p className="field-error">{errorFor('transmission')}</p>}
       </div>
 
       {/* Estado general */}
@@ -152,9 +249,10 @@ export default function VehicleStep() {
           <option value="Regular">Regular — Daños visibles</option>
           <option value="Requiere atención">Requiere atención</option>
         </select>
+        {errorFor('condition') && <p className="field-error">{errorFor('condition')}</p>}
       </div>
 
-      <button className="btn-primary" disabled={!canContinue} onClick={() => setStep(2)}>
+      <button className="btn-primary" disabled={!canContinue} onClick={handleContinue}>
         Continuar →
       </button>
     </div>

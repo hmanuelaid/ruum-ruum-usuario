@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
 import { Chip } from '@/components/ui/Chip'
 import { createClient } from '@/lib/supabase'
@@ -35,14 +36,36 @@ export default function ViajesPage() {
   const [tab, setTab] = useState<Tab>('Activos')
   const [trips, setTrips] = useState<UserTrip[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const { user } = useAuthStore()
+  const router = useRouter()
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      let cancelled = false
+
+      async function verifySession() {
+        const supabase = createClient()
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+
+        if (!cancelled && (authError || !authUser)) {
+          router.replace('/login?redirectTo=/viajes')
+        }
+      }
+
+      void verifySession()
+
+      return () => {
+        cancelled = true
+      }
+    }
+
     const userId = user.id
     let cancelled = false
 
     async function loadTrips() {
+      setLoading(true)
+      setError('')
       const supabase = createClient()
       let query = supabase
         .from('trips')
@@ -55,15 +78,23 @@ export default function ViajesPage() {
       if (tab === 'Finalizados') query = query.eq('status', 'finalizado')
       if (tab === 'Cancelados')  query = query.eq('status', 'cancelado')
 
-      const { data } = await query
+      const { data, error: tripsError } = await query
       if (cancelled) return
+
+      if (tripsError) {
+        setError(`No pudimos cargar tus viajes: ${tripsError.message}`)
+        setTrips([])
+        setLoading(false)
+        return
+      }
+
       setTrips(data ?? [])
       setLoading(false)
     }
 
     void loadTrips()
     return () => { cancelled = true }
-  }, [user, tab])
+  }, [router, user, tab])
 
   return (
     <>
@@ -76,6 +107,10 @@ export default function ViajesPage() {
       {loading ? (
         <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>
           <p className="muted">Cargando viajes…</p>
+        </div>
+      ) : error ? (
+        <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+          <p className="field-error">{error}</p>
         </div>
       ) : trips.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>

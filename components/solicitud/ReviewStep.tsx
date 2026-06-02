@@ -2,6 +2,11 @@
 import { useEffect, useState } from 'react'
 import { useWizardStore, useAppStore, useAuthStore } from '@/lib/store'
 import { useRouter } from 'next/navigation'
+import {
+  firstValidationError,
+  validateQuotePayload,
+  validateTripRequestPayload,
+} from '@/lib/validation/tripRequest'
 
 const SERVICE_LABELS: Record<string, string> = {
   personal: 'Personal', empresarial: 'Empresarial', agencia: 'Agencia',
@@ -30,16 +35,26 @@ export default function ReviewStep() {
   const [loading, setLoading] = useState(false)
   const [quote, setQuote] = useState<Quote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
+  const hasRoute = Boolean(draft.origin.address && draft.destination.address)
 
   useEffect(() => {
     const originAddress = draft.origin.address
     const destinationAddress = draft.destination.address
 
     if (!originAddress || !destinationAddress) {
-      setQuote(null)
       return
     }
 
+    const validation = validateQuotePayload({
+      origin: { address: originAddress },
+      destination: { address: destinationAddress },
+    })
+
+    if (!validation.ok) {
+      return
+    }
+
+    const quotePayload = validation.data
     let cancelled = false
 
     async function loadQuote() {
@@ -48,10 +63,7 @@ export default function ReviewStep() {
       const response = await fetch('/api/trips/quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          origin: { address: originAddress },
-          destination: { address: destinationAddress },
-        }),
+        body: JSON.stringify(quotePayload),
       })
 
       const payload = await response.json().catch(() => null) as {
@@ -74,22 +86,30 @@ export default function ReviewStep() {
 
   async function handleConfirm() {
     if (!user) { showToast('Debes iniciar sesión'); return }
+
+    const validation = validateTripRequestPayload({
+      serviceType: draft.serviceType ?? 'personal',
+      vehicle: draft.vehicle,
+      origin: draft.origin,
+      destination: draft.destination,
+      originContact: draft.originContact,
+      destinationContact: draft.destinationContact,
+      asap: Boolean(draft.asap),
+      scheduledAt: draft.scheduledAt,
+      specialInstructions: draft.specialInstructions,
+    })
+
+    if (!validation.ok) {
+      showToast(firstValidationError(validation.errors))
+      return
+    }
+
     setLoading(true)
 
     const response = await fetch('/api/trips/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        serviceType: draft.serviceType ?? 'personal',
-        vehicle: draft.vehicle,
-        origin: draft.origin,
-        destination: draft.destination,
-        originContact: draft.originContact,
-        destinationContact: draft.destinationContact,
-        asap: Boolean(draft.asap),
-        scheduledAt: draft.scheduledAt,
-        specialInstructions: draft.specialInstructions,
-      }),
+      body: JSON.stringify(validation.data),
     })
 
     const payload = await response.json().catch(() => null) as {
@@ -153,7 +173,7 @@ export default function ReviewStep() {
           </div>
         </div>
         <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          📍 {quote ? `~${quote.distanceKm} km estimados` : quoteLoading ? 'Calculando distancia…' : 'Distancia por calcular'}
+          📍 {hasRoute && quote ? `~${quote.distanceKm} km estimados` : quoteLoading ? 'Calculando distancia…' : 'Distancia por calcular'}
         </p>
       </div>
 
@@ -176,7 +196,7 @@ export default function ReviewStep() {
       <div className="card-hero" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <p style={{ fontSize: 13, opacity: .8 }}>Tarifa estimada</p>
         <p style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>
-          {quote ? formatMXN(quote.clientPriceMxn) : '—'}
+          {hasRoute && quote ? formatMXN(quote.clientPriceMxn) : '—'}
         </p>
         <p style={{ fontSize: 12, opacity: .7, marginTop: 4 }}>
           Conductor certificado · Evidencia fotográfica · Seguimiento · Soporte 24/7

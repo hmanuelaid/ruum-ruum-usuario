@@ -1,25 +1,79 @@
 import { NextResponse } from 'next/server'
-import type { ApiResponse } from '@/lib/types'
+import { createApiSupabaseClient, getAuthenticatedProfile, jsonError } from '@/lib/apiAuth'
 
-// Datos en memoria (se resetean al reiniciar el servidor)
-let profile = {
-  id: 'usr_001',
-  name: 'Carlos Mendoza',
-  phone: '+52 55 1234 5678',
-  email: 'carlos@ejemplo.com',
-  country: 'México',
-  state: 'CDMX',
-  address: '',
+const PROFILE_FIELDS = ['name', 'phone', 'country', 'state', 'address'] as const
+type ProfileField = (typeof PROFILE_FIELDS)[number]
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function sanitizeText(value: unknown, maxLength: number) {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') return null
+
+  const trimmed = value.trim()
+  if (trimmed.length > maxLength) return null
+  return trimmed
+}
+
+function validateProfilePatch(body: unknown) {
+  if (!isRecord(body)) return { error: 'Payload invalido.' }
+
+  const payload: Partial<Record<ProfileField, string>> = {}
+
+  for (const key of Object.keys(body)) {
+    if (!PROFILE_FIELDS.includes(key as ProfileField)) {
+      return { error: `Campo no permitido: ${key}` }
+    }
+  }
+
+  for (const field of PROFILE_FIELDS) {
+    const value = sanitizeText(body[field], field === 'address' ? 240 : 100)
+    if (value === null) return { error: `Valor invalido para ${field}.` }
+    if (value !== undefined) payload[field] = value
+  }
+
+  if (Object.keys(payload).length === 0) {
+    return { error: 'No hay campos para actualizar.' }
+  }
+
+  return { payload }
 }
 
 export async function GET() {
-  const res: ApiResponse<typeof profile> = { ok: true, data: profile }
-  return NextResponse.json(res)
+  const supabase = await createApiSupabaseClient()
+  const auth = await getAuthenticatedProfile(supabase)
+
+  if (!auth) {
+    return jsonError('Sesion no autenticada.', 401)
+  }
+
+  return NextResponse.json({ ok: true, data: auth.profile })
 }
 
 export async function PATCH(req: Request) {
-  const body = await req.json()
-  profile = { ...profile, ...body }
-  const res: ApiResponse<typeof profile> = { ok: true, data: profile }
-  return NextResponse.json(res)
+  const supabase = await createApiSupabaseClient()
+  const auth = await getAuthenticatedProfile(supabase)
+
+  if (!auth) {
+    return jsonError('Sesion no autenticada.', 401)
+  }
+
+  const body = await req.json().catch(() => null)
+  const validation = validateProfilePatch(body)
+
+  if ('error' in validation) {
+    return jsonError(validation.error ?? 'Payload invalido.')
+  }
+
+  const { data, error } = await supabase.rpc('update_user_profile', {
+    profile_payload: validation.payload,
+  })
+
+  if (error) {
+    return jsonError(error.message, 400)
+  }
+
+  return NextResponse.json({ ok: true, data })
 }

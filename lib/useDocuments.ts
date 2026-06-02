@@ -29,12 +29,14 @@ async function getSignedDocumentUrl(documentId: string) {
 export function useDocuments(ownerId: string | null, docTypes: { docType: string; label: string; required: boolean }[]) {
   const [docs, setDocs] = useState<DocumentItem[]>([])
   const [loading, setLoading] = useState(Boolean(ownerId))
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!ownerId) {
       queueMicrotask(() => {
         setDocs([])
         setLoading(false)
+        setError('')
       })
       return
     }
@@ -43,10 +45,22 @@ export function useDocuments(ownerId: string | null, docTypes: { docType: string
     let cancelled = false
 
     async function loadDocuments() {
-      const { data } = await supabase
+      setLoading(true)
+      setError('')
+
+      const { data, error: documentsError } = await supabase
         .from('documents')
         .select('id, type, status, storage_path, mime_type, notes')
         .eq('owner_id', ownerId)
+
+      if (documentsError) {
+        if (!cancelled) {
+          setDocs([])
+          setError(`No pudimos cargar tus documentos: ${documentsError.message}`)
+          setLoading(false)
+        }
+        return
+      }
 
       const merged = await Promise.all(docTypes.map(async dt => {
         const found = data?.find(d => d.type === dt.docType) as DocumentRecord | undefined
@@ -113,5 +127,5 @@ export function useDocuments(ownerId: string | null, docTypes: { docType: string
     setDocs(prev => prev.map(d => d.docType === updated.docType ? updated : d))
   }
 
-  return { docs, loading, updateDoc }
+  return { docs, loading, error, updateDoc }
 }

@@ -1,11 +1,138 @@
 'use client'
-import { useAuthStore } from '@/lib/store'
-import { useAppStore } from '@/lib/store'
-import { mockVehicles } from '@/lib/mock-data'
+import { useEffect, useState } from 'react'
+import { useAuthStore, useAppStore } from '@/lib/store'
+import { createClient } from '@/lib/supabase'
+import type { Vehicle } from '@/lib/types'
+
+type AccountStats = {
+  totalTrips: number
+  totalSpent: number
+  vehicles: number
+}
+
+type ProfileResponse = {
+  id: string
+  name: string
+  phone: string | null
+  email: string | null
+  country?: string | null
+  state?: string | null
+  address?: string | null
+}
+
+const EMPTY_STATS: AccountStats = {
+  totalTrips: 0,
+  totalSpent: 0,
+  vehicles: 0,
+}
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
 
 export default function CuentaPage() {
-  const { user } = useAuthStore()
+  const { user, setUser } = useAuthStore()
   const { showToast } = useAppStore()
+  const [profile, setProfile] = useState<ProfileResponse | null>(user)
+  const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [stats, setStats] = useState<AccountStats>(EMPTY_STATS)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadAccount() {
+      const [profileResponse, vehiclesResponse] = await Promise.all([
+        fetch('/api/profile'),
+        fetch('/api/vehicles'),
+      ])
+
+      const profilePayload = await profileResponse.json().catch(() => null) as {
+        ok?: boolean
+        data?: ProfileResponse
+        error?: string
+      } | null
+      const vehiclesPayload = await vehiclesResponse.json().catch(() => null) as {
+        ok?: boolean
+        data?: Vehicle[]
+        error?: string
+      } | null
+
+      if (cancelled) return
+
+      if (!profileResponse.ok || !profilePayload?.ok || !profilePayload.data) {
+        setError(profilePayload?.error ?? 'No pudimos cargar tu perfil.')
+        setLoading(false)
+        return
+      }
+
+      if (!vehiclesResponse.ok || !vehiclesPayload?.ok || !Array.isArray(vehiclesPayload.data)) {
+        setError(vehiclesPayload?.error ?? 'No pudimos cargar tus vehículos.')
+        setLoading(false)
+        return
+      }
+
+      const supabase = createClient()
+      const { data: trips, error: tripsError } = await supabase
+        .from('trips')
+        .select('id, client_price_mxn')
+        .eq('user_id', profilePayload.data.id)
+
+      if (cancelled) return
+
+      if (tripsError) {
+        setError(`No pudimos cargar tus métricas: ${tripsError.message}`)
+        setLoading(false)
+        return
+      }
+
+      setProfile(profilePayload.data)
+      setUser({
+        id: profilePayload.data.id,
+        name: profilePayload.data.name,
+        phone: profilePayload.data.phone ?? '',
+        email: profilePayload.data.email ?? '',
+      })
+      setVehicles(vehiclesPayload.data)
+      setStats({
+        totalTrips: trips?.length ?? 0,
+        totalSpent: (trips ?? []).reduce((sum, trip) => sum + Number(trip.client_price_mxn ?? 0), 0),
+        vehicles: vehiclesPayload.data.length,
+      })
+      setError('')
+      setLoading(false)
+    }
+
+    void loadAccount()
+
+    return () => {
+      cancelled = true
+    }
+  }, [setUser])
+
+  if (loading) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+        <p className="muted">Cargando cuenta…</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+        <p className="field-error">{error}</p>
+        <button className="btn-primary" onClick={() => window.location.reload()}>
+          Reintentar
+        </button>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -17,9 +144,12 @@ export default function CuentaPage() {
           placeItems: 'center', fontSize: '1.8rem', flexShrink: 0,
         }}>👤</div>
         <div style={{ flex: 1 }}>
-          <p style={{ fontWeight: 700, fontSize: 17 }}>{user?.name ?? 'Usuario'}</p>
-          <p className="muted">{user?.phone}</p>
-          <p className="muted">{user?.email}</p>
+          <p style={{ fontWeight: 700, fontSize: 17 }}>{profile?.name ?? 'Usuario'}</p>
+          <p className="muted">{profile?.phone}</p>
+          <p className="muted">{profile?.email}</p>
+          {(profile?.state || profile?.country) && (
+            <p className="muted">{[profile.state, profile.country].filter(Boolean).join(', ')}</p>
+          )}
         </div>
         <button className="btn-mini" onClick={() => showToast('Editar perfil próximamente')} aria-label="Editar perfil">
           <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -33,25 +163,28 @@ export default function CuentaPage() {
       <section>
         <div className="section-head" style={{ marginBottom: 10 }}>
           <h2 style={{ fontSize: 15, fontWeight: 700 }}>Mis vehículos</h2>
-          <button className="btn-text" onClick={() => showToast('Agregar vehículo próximamente')}>+ Agregar</button>
+          <button className="btn-text" onClick={() => showToast('Agrega un vehículo desde Solicitar traslado')}>+ Agregar</button>
         </div>
-        <div className="stack">
-          {mockVehicles.map(v => (
-            <article key={v.id} className="list-card">
-              <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--primary-dim)', display: 'grid', placeItems: 'center', fontSize: '1.3rem', flexShrink: 0 }}>🚗</div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: 600, fontSize: 14 }}>{v.alias}</p>
-                <p className="muted">{v.brand} {v.model} {v.year} · {v.plates}</p>
-                <p className="muted" style={{ fontSize: 12 }}>{v.color} · {v.transmission === 'automatica' ? 'Automático' : 'Manual'}</p>
-              </div>
-              <button className="btn-mini" aria-label="Opciones">
-                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
-                </svg>
-              </button>
-            </article>
-          ))}
-        </div>
+        {vehicles.length === 0 ? (
+          <div className="card" style={{ textAlign: 'center', padding: '28px 16px' }}>
+            <p style={{ fontSize: 28, marginBottom: 8 }}>🚗</p>
+            <p style={{ fontWeight: 600, marginBottom: 4 }}>Sin vehículos guardados</p>
+            <p className="muted">Cuando solicites un traslado, tus vehículos reales aparecerán aquí.</p>
+          </div>
+        ) : (
+          <div className="stack">
+            {vehicles.map(v => (
+              <article key={v.id} className="list-card">
+                <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--primary-dim)', display: 'grid', placeItems: 'center', fontSize: '1.3rem', flexShrink: 0 }}>🚗</div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontWeight: 600, fontSize: 14 }}>{v.alias}</p>
+                  <p className="muted">{v.brand} {v.model} {v.year} · {v.plates}</p>
+                  <p className="muted" style={{ fontSize: 12 }}>{v.color} · {v.transmission === 'automatica' ? 'Automático' : 'Manual'}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Configuración */}
@@ -74,19 +207,19 @@ export default function CuentaPage() {
       {/* Métricas rápidas */}
       <div className="metric-grid">
         <div className="metric-card">
-          <p className="value">2</p>
+          <p className="value">{stats.totalTrips}</p>
           <p className="label">Viajes totales</p>
         </div>
         <div className="metric-card">
-          <p className="value">$43,260</p>
+          <p className="value">{formatCurrency(stats.totalSpent)}</p>
           <p className="label">Total invertido</p>
         </div>
         <div className="metric-card">
-          <p className="value">2</p>
+          <p className="value">{stats.vehicles}</p>
           <p className="label">Vehículos</p>
         </div>
         <div className="metric-card">
-          <p className="value">4.9 ⭐</p>
+          <p className="value">-</p>
           <p className="label">Calificación</p>
         </div>
       </div>

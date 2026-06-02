@@ -2,15 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { calcQuote, estimateDistance } from '@/lib/pricing'
-
-type QuotePayload = {
-  origin?: {
-    address?: string
-  }
-  destination?: {
-    address?: string
-  }
-}
+import { firstValidationError, validateQuotePayload } from '@/lib/validation/tripRequest'
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status })
@@ -42,15 +34,15 @@ export async function POST(request: Request) {
     return jsonError('Sesion no autenticada.', 401)
   }
 
-  const payload = await request.json().catch(() => null) as QuotePayload | null
-  const origin = payload?.origin?.address?.trim() ?? ''
-  const destination = payload?.destination?.address?.trim() ?? ''
+  const payload = await request.json().catch(() => null) as unknown
+  const validation = validateQuotePayload(payload)
 
-  if (!origin || !destination) {
-    return jsonError('Origen y destino son requeridos.')
+  if (!validation.ok) {
+    return jsonError(firstValidationError(validation.errors))
   }
 
-  const distanceKm = estimateDistance(origin, destination)
+  const { origin, destination } = validation.data
+  const distanceKm = estimateDistance(origin.address, destination.address)
   const clientPriceMxn = calcQuote(distanceKm)
 
   return NextResponse.json({

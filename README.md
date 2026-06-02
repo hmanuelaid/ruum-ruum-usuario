@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RuumRuum Usuario
 
-## Getting Started
+Aplicacion web de usuario para solicitar traslados de vehiculos, cargar documentos de identidad, consultar viajes, evidencias, notificaciones, cuenta y soporte.
 
-First, run the development server:
+## Stack
+
+- Next.js App Router
+- React
+- Supabase Auth, Database y Storage
+- Zustand para cache de UI
+- ESLint, pruebas estaticas de seguridad y CI con GitHub Actions
+
+## Requisitos
+
+- Node.js 22 recomendado para coincidir con CI
+- npm
+- Proyecto Supabase con Auth habilitado
+- Supabase Storage con bucket privado `documents`
+
+## Variables de entorno
+
+Crea `.env.local`:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key
+NEXT_PUBLIC_ENABLE_DEMO_DATA=false
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Notas:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- No se requieren variables de Cloudinary. La dependencia fue retirada porque no hay uso en codigo fuente.
+- `NEXT_PUBLIC_ENABLE_DEMO_DATA=true` solo debe usarse para entornos demo controlados.
+- No guardes service-role keys en variables expuestas al navegador.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Instalacion
 
-## Learn More
+```bash
+npm ci
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+La app local corre en `http://localhost:3000`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Supabase
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Aplica las migraciones en `supabase/migrations` antes de validar flujos productivos. Las migraciones actuales cubren:
 
-## Deploy on Vercel
+- Estado de identidad y telefono verificado en `app_users`.
+- Bucket privado `documents`, paths por usuario, RLS y URLs firmadas de corta vida.
+- RPC atomica `create_trip_request` para crear viaje, timeline y pagos.
+- RLS para `trips`, `trip_timeline`, `payments`, `vehicles`, `documents`, `notifications` y `support_requests`.
+- RPCs autenticadas para perfil, vehiculos, notificaciones y soporte.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+El bucket `documents` debe permanecer privado. Los documentos se sirven mediante signed URLs generadas en endpoints autenticados.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Comandos
+
+```bash
+npm run dev             # servidor local
+npm run lint            # eslint
+npm test                # pruebas estaticas de seguridad
+npm run build           # build de produccion
+npm run audit:security  # npm audit desde severidad moderada
+```
+
+## Seguridad
+
+- Las rutas privadas se protegen en `proxy.ts` con `supabase.auth.getUser()` server-side.
+- Supabase Auth es la fuente primaria de sesion; Zustand solo cachea UI.
+- La verificacion de telefono usa OTP de Supabase y no tiene bypass de produccion.
+- Las solicitudes de viaje se validan en cliente, API y RPC SQL.
+- El navegador no calcula ni escribe precios, pagos o pago al conductor.
+- Los documentos de identidad no usan URLs publicas.
+- `postcss` esta fijado con `overrides` a `8.5.10` para cubrir GHSA-qx2v-qp2m-jg93 mientras Next actualiza su dependencia transitiva.
+- No usar `npm audit fix --force` sin revisar el plan: npm puede sugerir downgrades mayores inseguros para este proyecto.
+
+## CI
+
+El workflow `.github/workflows/ci.yml` ejecuta en push a `main`/`master` y en pull requests:
+
+1. `npm ci`
+2. `npm run lint`
+3. `npm test`
+4. `npm run build`
+5. `npm run audit:security`
+
+## Checklist antes de despliegue
+
+- Migraciones aplicadas en el ambiente destino.
+- RLS habilitado y probado con usuarios distintos.
+- Bucket `documents` privado.
+- Variables de entorno presentes y sin secretos de servidor expuestos.
+- `npm run lint`, `npm test`, `npm run build` y `npm run audit:security` en verde.
+- Revisar releases de Next para retirar el override de PostCSS cuando Next actualice su version transitiva.

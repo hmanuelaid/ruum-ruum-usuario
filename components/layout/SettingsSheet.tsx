@@ -1,17 +1,33 @@
 'use client'
+import { useState } from 'react'
 import { useAppStore } from '@/lib/store'
 import { useAuthStore } from '@/lib/store'
+import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
 export default function SettingsSheet() {
-  const { settingsOpen, setSettingsOpen } = useAppStore()
+  const { settingsOpen, setSettingsOpen, showToast } = useAppStore()
   const { user, logout } = useAuthStore()
+  const [loggingOut, setLoggingOut] = useState(false)
   const router = useRouter()
 
-  function handleLogout() {
+  async function handleLogout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+
+    const supabase = createClient()
+    const { error } = await supabase.auth.signOut()
+
+    if (error) {
+      showToast('No se pudo cerrar sesión. Intenta de nuevo.')
+      setLoggingOut(false)
+      return
+    }
+
     logout()
     setSettingsOpen(false)
     router.replace('/login')
+    router.refresh()
   }
 
   return (
@@ -63,8 +79,8 @@ export default function SettingsSheet() {
           <button className="settings-row">Aviso de privacidad <span>›</span></button>
         </div>
 
-        <button className="btn-secondary" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={handleLogout}>
-          Cerrar sesión
+        <button className="btn-secondary" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
         </button>
       </aside>
     </div>

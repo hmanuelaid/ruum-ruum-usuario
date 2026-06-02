@@ -21,16 +21,62 @@ export default function DocumentosPage() {
   const [profileError, setProfileError] = useState('')
 
   const ownerId   = user?.id ?? null
-  const ownerName = user?.name ?? 'Usuario'
-
   const { docs, loading, updateDoc } = useDocuments(ownerId, USER_DOCS)
 
+  useEffect(() => {
+    if (user) {
+      queueMicrotask(() => {
+        setProfileLoading(false)
+        setProfileError('')
+      })
+      return
+    }
 
-useEffect(() => {
-  if (!user) {
-    router.replace('/onboarding/registro')
-  }
-}, [user, router])
+    let cancelled = false
+
+    async function loadProfile() {
+      const supabase = createClient()
+      const {
+        data: { user: authUser },
+        error: authError,
+      } = await supabase.auth.getUser()
+
+      if (cancelled) return
+
+      if (authError || !authUser) {
+        router.replace('/login?redirectTo=/onboarding/documentos')
+        return
+      }
+
+      const { data: profile, error: profileLookupError } = await supabase
+        .from('app_users')
+        .select('id, name, phone, email')
+        .eq('auth_id', authUser.id)
+        .maybeSingle()
+
+      if (cancelled) return
+
+      if (profileLookupError || !profile) {
+        setProfileError(profileLookupError?.message ?? 'No encontramos tu perfil. Vuelve a completar el registro.')
+        setProfileLoading(false)
+        return
+      }
+
+      setUser({
+        id: profile.id,
+        name: profile.name,
+        phone: profile.phone ?? '',
+        email: profile.email ?? authUser.email ?? '',
+      })
+      setProfileLoading(false)
+    }
+
+    loadProfile()
+
+    return () => {
+      cancelled = true
+    }
+  }, [router, setUser, user])
 
   const requiredDone = docs
     .filter(d => d.required)
@@ -87,7 +133,6 @@ useEffect(() => {
                 doc={doc}
                 ownerId={ownerId}
                 ownerType="user"
-                ownerName={ownerName}
                 onUploaded={updateDoc}
               />
             ))}

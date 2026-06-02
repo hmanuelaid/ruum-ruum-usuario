@@ -1,19 +1,38 @@
 // app/onboarding/verificacion/page.tsx
 'use client'
-import { useState, useRef } from 'react'
+import { useRef, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/store'
+
+type RegistrationData = {
+  name?: string
+  phone?: string
+  email?: string
+}
+
+function subscribeToStoredPhone() {
+  return () => undefined
+}
+
+function getStoredPhone() {
+  return sessionStorage.getItem('reg_phone') ?? ''
+}
+
+function getServerPhone() {
+  return ''
+}
 
 export default function VerificacionPage() {
   const router = useRouter()
   const { setUser } = useAuthStore()
   const [code, setCode] = useState(['', '', '', '', '', ''])
+  const phone = useSyncExternalStore(subscribeToStoredPhone, getStoredPhone, getServerPhone)
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resending, setResending] = useState(false)
   const [error, setError] = useState('')
   const inputs = useRef<(HTMLInputElement | null)[]>([])
-
-  const phone = typeof window !== 'undefined' ? sessionStorage.getItem('reg_phone') ?? '' : ''
 
   function handleInput(i: number, val: string) {
     if (!/^\d?$/.test(val)) return
@@ -25,67 +44,142 @@ export default function VerificacionPage() {
     if (e.key === 'Backspace' && !code[i] && i > 0) inputs.current[i - 1]?.focus()
   }
 
+  function getRegistrationData(): RegistrationData | null {
+    const raw = sessionStorage.getItem('reg_data')
+    if (!raw) return null
+
+    try {
+      return JSON.parse(raw) as RegistrationData
+    } catch {
+      return null
+    }
+  }
+
+  async function resendCode() {
+    const reg = getRegistrationData()
+    if (!reg?.phone) {
+      setError('No encontramos el teléfono de registro. Vuelve a iniciar el registro.')
+      return
+    }
+
+    setResending(true)
+    setError('')
+
+    const supabase = createClient()
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      phone: reg.phone,
+      options: {
+        channel: 'sms',
+        data: {
+          name: reg.name,
+          email: reg.email,
+        },
+      },
+    })
+
+    if (otpError) {
+      setError(`No pudimos reenviar el código: ${otpError.message}`)
+    }
+
+    setResending(false)
+  }
+
   async function verify() {
     if (code.join('').length < 6) { setError('Ingresa los 6 dígitos'); return }
+    if (password.length < 8) { setError('La contraseña debe tener al menos 8 caracteres'); return }
     setLoading(true)
     setError('')
 
-    const raw = typeof window !== 'undefined' ? sessionStorage.getItem('reg_data') : null
-    const reg = raw ? JSON.parse(raw) as {
-      name?: string; phone?: string; email?: string; password?: string
-    } : null
+    const reg = getRegistrationData()
 
-    if (!reg?.email || !reg.password || !reg.name) {
+    if (!reg?.email || !reg.name || !reg.phone) {
       setError('No encontramos los datos de registro. Vuelve a iniciar el registro.')
       setLoading(false)
       return
     }
 
     const supabase = createClient()
-    let authId: string | undefined
+    const token = code.join('')
 
-    // 1. Crear cuenta en auth
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: reg.email,
-      password: reg.password,
+    const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
+      phone: reg.phone,
+      token,
+      type: 'sms',
     })
 
-    if (signUpError) {
-      // Si ya existe, intentar login
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: reg.email,
-        password: reg.password,
-      })
-      if (signInError) {
-        setError(signUpError.message)
-        setLoading(false)
-        return
-      }
-      authId = signInData.user.id
-    } else {
-      authId = signUpData.user?.id
+    if (otpError || !otpData.user) {
+      setError(otpError?.message ?? 'Código inválido o vencido.')
+      setLoading(false)
+      return
     }
 
-    if (!authId) {
-      setError('No se pudo crear la sesión del usuario.')
+    const phoneVerifiedAt = otpData.user.phone_confirmed_at ?? new Date().toISOString()
+    const authId = otpData.user.id
+
+    const { error: accountError } = await supabase.auth.updateUser({
+      email: reg.email,
+      password,
+      data: {
+        name: reg.name,
+        user_type: 'personal',
+      },
+    })
+
+    if (accountError) {
+      await supabase.auth.signOut()
+      setPassword('')
+      setError(`Teléfono verificado, pero no se pudo crear la cuenta: ${accountError.message}`)
       setLoading(false)
       return
     }
 
     // 2. Verificar si ya existe perfil en app_users
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('app_users')
       .select('id, name, phone, email')
       .eq('auth_id', authId)
       .maybeSingle()
 
+    if (existingError) {
+      setError(`No se pudo consultar el perfil: ${existingError.message}`)
+      setLoading(false)
+      return
+    }
+
     if (existing) {
-      setUser({ id: existing.id, name: existing.name, phone: existing.phone ?? '', email: existing.email })
+      const { data: updatedProfile, error: updateProfileError } = await supabase
+        .from('app_users')
+        .update({
+          name: reg.name,
+          email: reg.email,
+          phone: reg.phone,
+          phone_verified_at: phoneVerifiedAt,
+          identity_status: 'phone_verified',
+        })
+        .eq('id', existing.id)
+        .select('id, name, phone, email')
+        .single()
+
+      if (updateProfileError) {
+        setError(`No se pudo actualizar el perfil: ${updateProfileError.message}`)
+        setLoading(false)
+        return
+      }
+
+      sessionStorage.removeItem('reg_phone')
+      sessionStorage.removeItem('reg_data')
+      setPassword('')
+      setUser({
+        id: updatedProfile.id,
+        name: updatedProfile.name,
+        phone: updatedProfile.phone ?? '',
+        email: updatedProfile.email,
+      })
       router.push('/onboarding/documentos')
       return
     }
 
-    // 3. Crear perfil en app_users — aquí es donde aparece en el admin
+    // 3. Crear perfil en app_users con estado de identidad derivado del OTP verificado.
     const { data: profile, error: profileError } = await supabase
       .from('app_users')
       .insert({
@@ -93,6 +187,8 @@ export default function VerificacionPage() {
         name: reg.name,
         email: reg.email,
         phone: reg.phone ?? '',
+        phone_verified_at: phoneVerifiedAt,
+        identity_status: 'phone_verified',
         type: 'personal',
         status: 'activo',
       })
@@ -105,6 +201,9 @@ export default function VerificacionPage() {
       return
     }
 
+    sessionStorage.removeItem('reg_phone')
+    sessionStorage.removeItem('reg_data')
+    setPassword('')
     setUser({ id: profile.id, name: profile.name, phone: profile.phone ?? '', email: profile.email })
     setLoading(false)
     router.push('/onboarding/documentos')
@@ -116,7 +215,7 @@ export default function VerificacionPage() {
       <div className="onboarding-card">
         <div className="step-badge">Paso 2 de 3</div>
         <h1 className="onboarding-title">Confirma tus datos</h1>
-        <p className="onboarding-sub">Ingresa el código que enviamos a <strong>{phone || 'tu teléfono'}</strong></p>
+        <p className="onboarding-sub">Ingresa el código que enviamos a <strong>{phone || 'tu teléfono'}</strong> y crea tu contraseña</p>
 
         <div className="otp-row">
           {code.map((d, i) => (
@@ -127,13 +226,24 @@ export default function VerificacionPage() {
           ))}
         </div>
 
+        <label className="field-label">Contraseña</label>
+        <input
+          className="field-input"
+          type="password"
+          placeholder="Mínimo 8 caracteres"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          minLength={8}
+          required
+        />
+
         {error && <p className="field-error">{error}</p>}
 
         <button className="btn-primary" onClick={verify} disabled={loading}>
-          {loading ? 'Creando tu cuenta…' : 'Continuar'}
+          {loading ? 'Verificando…' : 'Verificar y continuar'}
         </button>
-        <button className="btn-ghost" onClick={() => router.push('/onboarding/documentos')}>
-          Omitir verificación
+        <button className="btn-ghost" onClick={resendCode} disabled={loading || resending}>
+          {resending ? 'Reenviando…' : 'Reenviar código'}
         </button>
       </div>
     </div>

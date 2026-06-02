@@ -41,25 +41,35 @@ export default function InicioPage() {
 
   useEffect(() => {
     if (!user) return
-    loadData()
+
+    const userId = user.id
+    let cancelled = false
+
+    async function loadData() {
+      const supabase = createClient()
+      const { data: trips } = await supabase
+        .from('trips')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      if (cancelled) return
+
+      const all = (trips ?? []) as Trip[]
+      const active = all.find(t => ACTIVE_STATUSES.includes(t.status)) ?? null
+      setActiveTrip(active)
+      setRecentTrips(all.slice(0, 3))
+      setTotalTrips(all.length)
+      setLoading(false)
+    }
+
+    void loadData()
+
+    return () => {
+      cancelled = true
+    }
   }, [user])
-
-  async function loadData() {
-    const supabase = createClient()
-    const { data: trips } = await supabase
-      .from('trips')
-      .select('*')
-      .eq('user_id', user!.id)
-      .order('created_at', { ascending: false })
-      .limit(10)
-
-    const all = (trips ?? []) as Trip[]
-    const active = all.find(t => ACTIVE_STATUSES.includes(t.status)) ?? null
-    setActiveTrip(active)
-    setRecentTrips(all.slice(0, 3))
-    setTotalTrips(all.length)
-    setLoading(false)
-  }
 
   return (
     <>

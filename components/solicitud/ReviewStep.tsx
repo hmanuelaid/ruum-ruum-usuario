@@ -1,9 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useWizardStore, useAppStore, useAuthStore } from '@/lib/store'
 import { useRouter } from 'next/navigation'
-import { calcQuote, formatMXN, estimateDistance } from '@/lib/pricing'
-import { createClient } from '@/lib/supabase'
 
 const SERVICE_LABELS: Record<string, string> = {
   personal: 'Personal', empresarial: 'Empresarial', agencia: 'Agencia',
@@ -11,12 +9,18 @@ const SERVICE_LABELS: Record<string, string> = {
   recuperacion: 'Recuperación', especial: 'Especial',
 }
 
-const TIMELINE_STEPS = [
-  'Solicitud creada', 'Viaje revisado', 'Conductor asignado',
-  'Conductor aceptó', 'Llegada al origen', 'Evidencia inicial',
-  'Traslado iniciado', 'En ruta', 'Llegada a destino',
-  'Evidencia final', 'Entrega confirmada', 'Viaje cerrado',
-]
+type Quote = {
+  distanceKm: number
+  clientPriceMxn: number
+}
+
+function formatMXN(amount: number): string {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
 
 export default function ReviewStep() {
   const { draft, resetDraft } = useWizardStore()
@@ -24,135 +28,85 @@ export default function ReviewStep() {
   const { user } = useAuthStore()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [quote, setQuote] = useState<Quote | null>(null)
+  const [quoteLoading, setQuoteLoading] = useState(false)
 
-  const distanceKm = estimateDistance(
-    draft.origin.address ?? '',
-    draft.destination.address ?? '',
-  )
-  const price = calcQuote(distanceKm)
-  const driverPay = Math.round(price * 0.70)
+  useEffect(() => {
+    const originAddress = draft.origin.address
+    const destinationAddress = draft.destination.address
+
+    if (!originAddress || !destinationAddress) {
+      setQuote(null)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadQuote() {
+      setQuoteLoading(true)
+
+      const response = await fetch('/api/trips/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: { address: originAddress },
+          destination: { address: destinationAddress },
+        }),
+      })
+
+      const payload = await response.json().catch(() => null) as {
+        ok?: boolean
+        data?: Quote
+      } | null
+
+      if (!cancelled) {
+        setQuote(payload?.ok && payload.data ? payload.data : null)
+        setQuoteLoading(false)
+      }
+    }
+
+    loadQuote()
+
+    return () => {
+      cancelled = true
+    }
+  }, [draft.destination.address, draft.origin.address])
 
   async function handleConfirm() {
     if (!user) { showToast('Debes iniciar sesión'); return }
     setLoading(true)
-    const supabase = createClient()
 
-    // Generar ID de viaje
-    const { data: idData, error: idError } = await supabase.rpc('generate_trip_id')
-    if (idError || !idData) {
-      showToast('Error al generar el folio del viaje')
-      setLoading(false)
-      return
-    }
-    const tripId = idData
+    const response = await fetch('/api/trips/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serviceType: draft.serviceType ?? 'personal',
+        vehicle: draft.vehicle,
+        origin: draft.origin,
+        destination: draft.destination,
+        originContact: draft.originContact,
+        destinationContact: draft.destinationContact,
+        asap: Boolean(draft.asap),
+        scheduledAt: draft.scheduledAt,
+        specialInstructions: draft.specialInstructions,
+      }),
+    })
 
-    // Crear vehículo si no existe
-    let vehicleId: string | null = null
-    const isRealUUID = draft.vehicle.id &&
-      draft.vehicle.id.length === 36 &&
-      draft.vehicle.id.split('-').length === 5
-
-    if (isRealUUID) {
-      vehicleId = draft.vehicle.id!
-    } else {
-      const { data: veh, error: vehicleError } = await supabase
-        .from('vehicles')
-        .insert({
-          owner_id: user.id,
-          alias: draft.vehicle.alias ?? `${draft.vehicle.brand} ${draft.vehicle.model}`,
-          brand: draft.vehicle.brand,
-          model: draft.vehicle.model,
-          year: draft.vehicle.year ? Number(draft.vehicle.year) : null,
-          color: draft.vehicle.color,
-          plates: draft.vehicle.plates,
-          vin: draft.vehicle.vin,
-          type: draft.vehicle.type,
-          transmission: draft.vehicle.transmission,
-          condition: draft.vehicle.condition,
-        })
-        .select('id')
-        .single()
-
-      if (vehicleError) {
-        showToast('Error al guardar el vehículo')
-        setLoading(false)
-        return
+    const payload = await response.json().catch(() => null) as {
+      ok?: boolean
+      data?: {
+        tripId?: string
       }
+      error?: string
+    } | null
 
-      vehicleId = veh?.id ?? null
-    }
-
-    // Crear viaje
-    const insertPayload: Record<string, unknown> = {
-      id: tripId,
-      status: 'solicitud_recibida',
-      service_type: draft.serviceType ?? 'personal',
-      user_id: user.id,
-      vehicle_id: vehicleId,
-      vehicle_brand: draft.vehicle.brand,
-      vehicle_model: draft.vehicle.model,
-      vehicle_color: draft.vehicle.color,
-      vehicle_plates: draft.vehicle.plates,
-      origin_address: draft.origin.address,
-      destination_address: draft.destination.address,
-      origin_contact_name: draft.originContact.name,
-      origin_contact_phone: draft.originContact.phone,
-      dest_contact_name: draft.destinationContact.name,
-      dest_contact_phone: draft.destinationContact.phone,
-      asap: Boolean(draft.asap),
-      distance_km: distanceKm,
-      client_price_mxn: price,
-      driver_pay_mxn: driverPay,
-    }
-
-// Agregar campos opcionales solo si tienen valor
-if (draft.vehicle.year) insertPayload.vehicle_year = Number(draft.vehicle.year)
-if (draft.vehicle.vin) insertPayload.vehicle_vin = draft.vehicle.vin
-if (draft.vehicle.type) insertPayload.vehicle_type = draft.vehicle.type
-if (draft.vehicle.transmission) insertPayload.vehicle_transmission = draft.vehicle.transmission
-if (draft.vehicle.condition) insertPayload.vehicle_condition = draft.vehicle.condition
-if (draft.origin.reference) insertPayload.origin_reference = draft.origin.reference
-if (draft.destination.reference) insertPayload.destination_reference = draft.destination.reference
-if (draft.scheduledAt) insertPayload.scheduled_at = draft.scheduledAt
-if (draft.specialInstructions) insertPayload.special_instructions = draft.specialInstructions
-
-    const { error: tripError } = await supabase.from('trips').insert(insertPayload)
-
-    if (tripError) {
-      showToast('Error al crear la solicitud')
+    if (!response.ok || !payload?.ok) {
+      showToast(payload?.error ?? 'Error al crear la solicitud')
       setLoading(false)
       return
     }
 
-    // Crear timeline
-    await supabase.from('trip_timeline').insert(
-      TIMELINE_STEPS.map((label, i) => ({
-        trip_id: tripId,
-        step: i + 1,
-        label,
-        done: false,
-        active: i === 0,
-      }))
-    )
-
-    // Crear pagos pendientes
-    await supabase.from('payments').insert([
-      {
-        trip_id: tripId,
-        type: 'cobro_usuario',
-        amount: price,
-        status: 'pendiente',
-        concept: `Traslado ${draft.origin.address?.split(',')[0]} → ${draft.destination.address?.split(',')[0]}`,
-      },
-      {
-        trip_id: tripId,
-        type: 'pago_conductor',
-        amount: driverPay,
-        status: 'pendiente',
-        concept: `Pago conductor ${tripId}`,
-      },
-    ])
-
+    const tripId = payload.data?.tripId ?? 'nueva'
     showToast(`¡Solicitud ${tripId} creada!`)
     resetDraft()
     router.push('/viajes')
@@ -198,7 +152,9 @@ if (draft.specialInstructions) insertPayload.special_instructions = draft.specia
             </p>
           </div>
         </div>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>📍 ~{distanceKm} km estimados</p>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          📍 {quote ? `~${quote.distanceKm} km estimados` : quoteLoading ? 'Calculando distancia…' : 'Distancia por calcular'}
+        </p>
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -219,12 +175,11 @@ if (draft.specialInstructions) insertPayload.special_instructions = draft.specia
 
       <div className="card-hero" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <p style={{ fontSize: 13, opacity: .8 }}>Tarifa estimada</p>
-        <p style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>{formatMXN(price)}</p>
+        <p style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>
+          {quote ? formatMXN(quote.clientPriceMxn) : '—'}
+        </p>
         <p style={{ fontSize: 12, opacity: .7, marginTop: 4 }}>
           Conductor certificado · Evidencia fotográfica · Seguimiento · Soporte 24/7
-        </p>
-        <p style={{ fontSize: 11, opacity: .6 }}>
-          Base $350 + {distanceKm} km × $18{distanceKm > 100 ? ' + 25% foráneo' : ''}
         </p>
       </div>
 

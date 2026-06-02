@@ -1,18 +1,18 @@
 // lib/storage.ts
 import { createClient } from './supabase'
+import {
+  ACCEPTED_DOCUMENT_TYPES,
+  MAX_DOCUMENT_SIZE_BYTES,
+  MAX_DOCUMENT_SIZE_MB,
+  validateDocumentMetadata,
+} from './documentValidation'
 
-export const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
-export const MAX_SIZE_MB = 10
-export const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
+export const ACCEPTED_TYPES = [...ACCEPTED_DOCUMENT_TYPES]
+export const MAX_SIZE_MB = MAX_DOCUMENT_SIZE_MB
+export const MAX_SIZE_BYTES = MAX_DOCUMENT_SIZE_BYTES
 
 export function validateFile(file: File): string | null {
-  if (!ACCEPTED_TYPES.includes(file.type)) {
-    return `Tipo no permitido. Usa JPG, PNG, WEBP o PDF.`
-  }
-  if (file.size > MAX_SIZE_BYTES) {
-    return `El archivo supera ${MAX_SIZE_MB}MB.`
-  }
-  return null
+  return validateDocumentMetadata(file)
 }
 
 export function getPreviewUrl(file: File): string {
@@ -24,21 +24,51 @@ export async function uploadDocument(params: {
   ownerId: string
   ownerType: 'user' | 'driver'
   docType: string
-}): Promise<{ url: string; path: string } | { error: string }> {
-  const { file, ownerId, ownerType, docType } = params
-  const supabase = createClient()
+}): Promise<{
+  document: {
+    id: string
+    status: string
+    storagePath: string
+    mimeType: string
+  }
+  fileSize: number
+  mimeType: string
+  path: string
+  signedUrl?: string
+} | { error: string }> {
+  const { file, ownerType, docType } = params
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('ownerType', ownerType)
+  formData.append('docType', docType)
 
-  const ext  = file.name.split('.').pop()
-  const path = `${ownerType}/${ownerId}/${docType}_${Date.now()}.${ext}`
+  const response = await fetch('/api/documents/upload', {
+    method: 'POST',
+    body: formData,
+  })
 
-  const { error } = await supabase.storage
-    .from('documents')
-    .upload(path, file, { upsert: true, contentType: file.type })
+  const payload = await response.json().catch(() => null) as {
+    ok?: boolean
+    data?: {
+      document: {
+        id: string
+        status: string
+        storagePath: string
+        mimeType: string
+      }
+      fileSize: number
+      mimeType: string
+      path: string
+      signedUrl?: string
+    }
+    error?: string
+  } | null
 
-  if (error) return { error: error.message }
+  if (!response.ok || !payload?.ok || !payload.data) {
+    return { error: payload?.error ?? 'No se pudo subir el documento.' }
+  }
 
-  const { data } = supabase.storage.from('documents').getPublicUrl(path)
-  return { url: data.publicUrl, path }
+  return payload.data
 }
 
 export async function uploadEvidence(params: {

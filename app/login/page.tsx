@@ -22,14 +22,26 @@ export default function LoginPage() {
 
     const { data: profile } = await supabase
       .from('app_users')
-      .select('*')
+      .select('id, name, phone, email')
       .eq('auth_id', data.user.id)
-      .single()
+      .maybeSingle()
 
-    if (!profile) { setError('Perfil no encontrado'); setLoading(false); return }
+    if (!profile) {
+      await supabase.auth.signOut()
+      setError('Perfil no encontrado')
+      setLoading(false)
+      return
+    }
 
     setUser({ id: profile.id, name: profile.name, phone: profile.phone, email: profile.email })
-    router.replace('/inicio')
+
+    const redirectTo = new URLSearchParams(window.location.search).get('redirectTo')
+    const destination = redirectTo?.startsWith('/') && !redirectTo.startsWith('//')
+      ? redirectTo
+      : '/inicio'
+
+    router.replace(destination)
+    router.refresh()
   }
 
   return (

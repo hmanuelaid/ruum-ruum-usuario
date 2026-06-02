@@ -1,7 +1,6 @@
 'use client'
 import { useState, useRef } from 'react'
 import { validateFile, getPreviewUrl, uploadDocument, ACCEPTED_TYPES, MAX_SIZE_MB } from '@/lib/storage'
-import { createClient } from '@/lib/supabase'
 
 export type DocStatus = 'pendiente_carga' | 'en_revision' | 'aprobado' | 'rechazado' | 'vencido'
 
@@ -11,7 +10,9 @@ export interface DocumentItem {
   label: string
   required: boolean
   status: DocStatus
-  url?: string
+  previewUrl?: string
+  storagePath?: string
+  mimeType?: string
   notes?: string
 }
 
@@ -27,17 +28,19 @@ interface Props {
   doc: DocumentItem
   ownerId: string
   ownerType: 'user' | 'driver'
-  ownerName: string
   onUploaded?: (doc: DocumentItem) => void
 }
 
-export function DocumentUploader({ doc, ownerId, ownerType, ownerName, onUploaded }: Props) {
-  const [status, setStatus]       = useState<DocStatus>(doc.status)
-  const [preview, setPreview]     = useState<string | null>(doc.url ?? null)
-  const [fileType, setFileType]   = useState<string>('')
+export function DocumentUploader({ doc, ownerId, ownerType, onUploaded }: Props) {
+  const [optimisticStatus, setOptimisticStatus] = useState<DocStatus | null>(null)
+  const [localPreview, setLocalPreview] = useState<string | null>(null)
+  const [localFileType, setLocalFileType] = useState<string>('')
   const [error, setError]         = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const inputRef                  = useRef<HTMLInputElement>(null)
+  const status                    = optimisticStatus ?? doc.status
+  const preview                   = localPreview ?? doc.previewUrl ?? null
+  const fileType                  = localFileType || doc.mimeType || ''
   const cfg                       = STATUS_CONFIG[status]
 
   async function handleFile(file: File) {
@@ -45,8 +48,9 @@ export function DocumentUploader({ doc, ownerId, ownerType, ownerName, onUploade
     const err = validateFile(file)
     if (err) { setError(err); return }
 
-    setPreview(getPreviewUrl(file))
-    setFileType(file.type)
+    const previewUrl = getPreviewUrl(file)
+    setLocalPreview(previewUrl)
+    setLocalFileType(file.type)
     setUploading(true)
 
     const result = await uploadDocument({
@@ -59,54 +63,16 @@ export function DocumentUploader({ doc, ownerId, ownerType, ownerName, onUploade
       return
     }
 
-    const supabase = createClient()
-    const { data: existing, error: lookupError } = await supabase
-      .from('documents')
-      .select('id')
-      .eq('owner_id', ownerId)
-      .eq('type', doc.docType)
-      .maybeSingle()
-
-    if (lookupError) {
-      setError(`No se pudo consultar el documento: ${lookupError.message}`)
-      setUploading(false)
-      return
-    }
-
-    if (existing) {
-      const { error: updateError } = await supabase.from('documents').update({
-        status: 'en_revision',
-        url: result.url,
-        uploaded_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('id', existing.id)
-
-      if (updateError) {
-        setError(`El archivo subio, pero no se actualizo el registro: ${updateError.message}`)
-        setUploading(false)
-        return
-      }
-    } else {
-      const { error: insertError } = await supabase.from('documents').insert({
-        owner_id:   ownerId,
-        owner_type: ownerType,
-        owner_name: ownerName,
-        type:       doc.docType,
-        status:     'en_revision',
-        url:        result.url,
-        uploaded_at: new Date().toISOString(),
-      })
-
-      if (insertError) {
-        setError(`El archivo subio, pero no se registro para revision: ${insertError.message}`)
-        setUploading(false)
-        return
-      }
-    }
-
-    setStatus('en_revision')
+    setOptimisticStatus('en_revision')
     setUploading(false)
-    onUploaded?.({ ...doc, status: 'en_revision', url: result.url })
+    onUploaded?.({
+      ...doc,
+      id: result.document.id,
+      status: 'en_revision',
+      storagePath: result.path,
+      mimeType: result.mimeType,
+      previewUrl,
+    })
   }
 
   return (
@@ -153,7 +119,7 @@ export function DocumentUploader({ doc, ownerId, ownerType, ownerName, onUploade
       {/* Preview */}
       {preview && (
         <div style={{ padding: '0 14px 12px' }}>
-          {fileType === 'application/pdf' || (doc.url?.endsWith('.pdf')) ? (
+          {fileType === 'application/pdf' || doc.storagePath?.toLowerCase().endsWith('.pdf') ? (
             <div style={{
               background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)',
               padding: '12px', display: 'flex', alignItems: 'center', gap: 10,

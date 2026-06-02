@@ -1,13 +1,11 @@
 // ─── lib/store.ts ─────────────────────────────────────────────────────────────
 'use client'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type { Trip, SolicitudDraft, User } from './types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 interface AuthState {
   user: User | null
-  isAuthenticated: boolean
   firstLaunch: boolean
   onboardingComplete: boolean
   setUser: (user: User) => void
@@ -15,20 +13,14 @@ interface AuthState {
   completeOnboarding: () => void
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      user: null,
-      isAuthenticated: false,
-      firstLaunch: true,
-      onboardingComplete: false,
-      setUser: (user) => set({ user, isAuthenticated: true }),
-      logout: () => set({ user: null, isAuthenticated: false }),
-      completeOnboarding: () => set({ firstLaunch: false, onboardingComplete: true }),
-    }),
-    { name: 'ruum-user-auth' }
-  )
-)
+export const useAuthStore = create<AuthState>()((set) => ({
+  user: null,
+  firstLaunch: true,
+  onboardingComplete: false,
+  setUser: (user) => set({ user }),
+  logout: () => set({ user: null }),
+  completeOnboarding: () => set({ firstLaunch: false, onboardingComplete: true }),
+}))
 
 // ── Wizard de solicitud ───────────────────────────────────────────────────────
 const EMPTY_DRAFT: SolicitudDraft = {

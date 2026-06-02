@@ -46,7 +46,7 @@ La app local corre en `http://localhost:3000`.
 
 Aplica las migraciones en `supabase/migrations` antes de validar flujos productivos. Las migraciones actuales cubren:
 
-- Estado de identidad y telefono verificado en `app_users`.
+- Estado de identidad de usuario en `app_users`.
 - Bucket privado `documents`, paths por usuario, RLS y URLs firmadas de corta vida.
 - RPC atomica `create_trip_request` para crear viaje, timeline y pagos.
 - RLS para `trips`, `trip_timeline`, `payments`, `vehicles`, `documents`, `notifications` y `support_requests`.
@@ -68,7 +68,7 @@ npm run audit:security  # npm audit desde severidad moderada
 
 - Las rutas privadas se protegen en `proxy.ts` con `supabase.auth.getUser()` server-side.
 - Supabase Auth es la fuente primaria de sesion; Zustand solo cachea UI.
-- La verificacion de telefono usa OTP de Supabase y no tiene bypass de produccion.
+- El onboarding crea cuentas con Supabase Auth mediante correo y contraseña, sin verificacion SMS ni almacenamiento de contraseñas en el navegador.
 - Las solicitudes de viaje se validan en cliente, API y RPC SQL.
 - El navegador no calcula ni escribe precios, pagos o pago al conductor.
 - Los documentos de identidad no usan URLs publicas.

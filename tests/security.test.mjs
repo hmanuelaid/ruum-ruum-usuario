@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import path from 'node:path'
 
@@ -28,14 +28,15 @@ test('private user routes are protected by the Supabase server guard', () => {
   assert.match(proxy, /\/cuenta\/:path\*/)
 })
 
-test('onboarding phone verification uses Supabase OTP without bypass copy', () => {
-  const verification = read('app/onboarding/verificacion/page.tsx')
+test('onboarding signup does not use SMS verification or store passwords', () => {
   const registration = read('app/onboarding/registro/page.tsx')
-  const onboardingFlow = `${registration}\n${verification}`
+  const verificationPath = path.join(root, 'app/onboarding/verificacion/page.tsx')
 
-  assert.match(verification, /verifyOtp/)
-  assert.doesNotMatch(verification, /Omitir verificacion|Omitir verificaci[oó]n/)
-  assert.doesNotMatch(onboardingFlow, /reg_password|password.*sessionStorage|sessionStorage.*password/i)
+  assert.equal(existsSync(verificationPath), false)
+  assert.match(registration, /signUp/)
+  assert.doesNotMatch(registration, /signInWithOtp|verifyOtp|channel:\s*['"]sms['"]|type:\s*['"]sms['"]/)
+  assert.doesNotMatch(registration, /onboarding\/verificacion/)
+  assert.doesNotMatch(registration, /reg_password|password.*sessionStorage|sessionStorage.*password|sessionStorage/i)
 })
 
 test('document uploads stay private and require server validation', () => {

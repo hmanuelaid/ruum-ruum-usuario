@@ -93,7 +93,7 @@ export default function DocumentosPage() {
       <button className="btn-back" onClick={() => router.back()}>← Atrás</button>
 
       <div className="onboarding-card" style={{ gap: '1.25rem' }}>
-        <div className="step-badge">Paso 3 de 3</div>
+        <div className="step-badge">Paso 2 de 2</div>
 
         <div>
           <h1 className="onboarding-title">Verifica tu identidad</h1>

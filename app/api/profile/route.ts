@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createApiSupabaseClient, getAuthenticatedProfile, jsonError } from '@/lib/apiAuth'
+import { createApiSupabaseClient, jsonError } from '@/lib/apiAuth'
 
 const PROFILE_FIELDS = ['name', 'phone', 'country', 'state', 'address'] as const
 type ProfileField = (typeof PROFILE_FIELDS)[number]
@@ -74,132 +74,137 @@ function validateProfilePatch(body: unknown): { error: string } | { payload: Par
 }
 
 export async function GET() {
-  console.log('🔵 GET /api/profile - Starting...')
-  
-  const supabase = await createApiSupabaseClient()
-  
-  // Usar getUser en lugar de getSession
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  
-  if (userError || !user) {
-    console.log('🔴 No user found:', userError?.message)
-    return jsonError('Sesión no autenticada.', 401)
-  }
-  
-  console.log('✅ User authenticated:', user.email)
-  
-  // Obtener el perfil
-  let { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, name, email, phone, country, state, address')
-    .eq('id', user.id)
-    .single()
-  
-  // Si no existe perfil, crearlo
-  if (profileError && profileError.code === 'PGRST116') {
-    console.log('📝 Creating profile for user')
-    const { data: newProfile, error: createError } = await supabase
-      .from('profiles')
-      .insert({
-        id: user.id,
-        name: user.user_metadata?.name || user.email?.split('@')[0] || '',
-        email: user.email,
-        phone: null,
-        country: null,
-        state: null,
-        address: null
-      })
-      .select()
-      .single()
+  try {
+    const supabase = await createApiSupabaseClient()
     
-    if (createError) {
-      console.error('❌ Error creating profile:', createError)
-      return jsonError('Error al crear perfil', 500)
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    
+    if (userError || !user) {
+      return jsonError('Sesión no autenticada.', 401)
     }
     
-    profile = newProfile
-  } else if (profileError) {
-    console.error('❌ Profile error:', profileError)
-    return jsonError('Error al obtener perfil', 500)
+    // Obtener el perfil
+    let { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, name, email, phone, country, state, address')
+      .eq('id', user.id)
+      .single()
+    
+    // Si no existe perfil, crearlo
+    if (profileError && profileError.code === 'PGRST116') {
+      const { data: newProfile, error: createError } = await supabase
+        .from('profiles')
+        .insert({
+          id: user.id,
+          name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+          email: user.email,
+          phone: null,
+          country: null,
+          state: null,
+          address: null
+        })
+        .select('id, name, email, phone, country, state, address')
+        .single()
+      
+      if (createError || !newProfile) {
+        console.error('Error creating profile:', createError)
+        return jsonError('Error al crear perfil', 500)
+      }
+      
+      profile = newProfile
+    } else if (profileError) {
+      console.error('Profile error:', profileError)
+      return jsonError('Error al obtener perfil', 500)
+    }
+    
+    // ✅ Verificar que profile no es null
+    if (!profile) {
+      return jsonError('Perfil no encontrado', 404)
+    }
+    
+    const response: ProfileResponse = {
+      id: profile.id,
+      name: profile.name || '',
+      email: profile.email || '',
+      phone: profile.phone ?? null,
+      country: profile.country ?? null,
+      state: profile.state ?? null,
+      address: profile.address ?? null,
+    }
+    
+    return NextResponse.json({ ok: true, data: response })
+    
+  } catch (error) {
+    console.error('Unexpected error:', error)
+    return jsonError('Error interno del servidor', 500)
   }
-
-  const response: ProfileResponse = {
-    id: profile.id,
-    name: profile.name || '',
-    email: profile.email || '',
-    phone: profile.phone ?? null,
-    country: profile.country ?? null,
-    state: profile.state ?? null,
-    address: profile.address ?? null,
-  }
-
-  console.log('🟢 Profile returned successfully')
-  return NextResponse.json({ ok: true, data: response })
 }
 
 export async function PATCH(req: Request) {
-  console.log('🔵 PATCH /api/profile - Starting...')
-  
-  const supabase = await createApiSupabaseClient()
-  
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  
-  if (userError || !user) {
-    console.log('🔴 No user found')
-    return jsonError('Sesión no autenticada.', 401)
+  try {
+    const supabase = await createApiSupabaseClient()
+    
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    
+    if (userError || !user) {
+      return jsonError('Sesión no autenticada.', 401)
+    }
+    
+    const body = await req.json().catch(() => null)
+    if (!body) {
+      return jsonError('Payload inválido.', 400)
+    }
+    
+    const validation = validateProfilePatch(body)
+    
+    if ('error' in validation) {
+      return jsonError(validation.error, 400)
+    }
+    
+    // Actualizar perfil
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        name: validation.payload.name,
+        phone: validation.payload.phone,
+        country: validation.payload.country,
+        state: validation.payload.state,
+        address: validation.payload.address,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id)
+    
+    if (updateError) {
+      console.error('Update error:', updateError)
+      return jsonError(updateError.message, 400)
+    }
+    
+    // Obtener perfil actualizado
+    const { data: updatedProfile, error: fetchError } = await supabase
+      .from('profiles')
+      .select('id, name, email, phone, country, state, address')
+      .eq('id', user.id)
+      .single()
+    
+    if (fetchError || !updatedProfile) {
+      console.error('Fetch error:', fetchError)
+      return jsonError('Error al obtener perfil actualizado', 500)
+    }
+    
+    const response: ProfileResponse = {
+      id: updatedProfile.id,
+      name: updatedProfile.name || '',
+      email: updatedProfile.email || '',
+      phone: updatedProfile.phone ?? null,
+      country: updatedProfile.country ?? null,
+      state: updatedProfile.state ?? null,
+      address: updatedProfile.address ?? null,
+    }
+    
+    return NextResponse.json({ ok: true, data: response })
+    
+  } catch (error) {
+    console.error('Unexpected error:', error)
+    return jsonError('Error interno del servidor', 500)
   }
-
-  const body = await req.json().catch(() => null)
-  if (!body) {
-    return jsonError('Payload inválido.', 400)
-  }
-
-  const validation = validateProfilePatch(body)
-  
-  if ('error' in validation) {
-    return jsonError(validation.error, 400)
-  }
-
-  // Actualizar perfil
-  const { error: updateError } = await supabase
-    .from('profiles')
-    .update({
-      name: validation.payload.name,
-      phone: validation.payload.phone,
-      country: validation.payload.country,
-      state: validation.payload.state,
-      address: validation.payload.address,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', user.id)
-
-  if (updateError) {
-    console.error('❌ Update error:', updateError)
-    return jsonError(updateError.message, 400)
-  }
-
-  // Obtener perfil actualizado
-  const { data: updatedProfile, error: fetchError } = await supabase
-    .from('profiles')
-    .select('id, name, email, phone, country, state, address')
-    .eq('id', user.id)
-    .single()
-
-  if (fetchError) {
-    console.error('❌ Fetch error:', fetchError)
-    return jsonError('Error al obtener perfil actualizado', 500)
-  }
-
-  const response: ProfileResponse = {
-    id: updatedProfile.id,
-    name: updatedProfile.name || '',
-    email: updatedProfile.email || '',
-    phone: updatedProfile.phone ?? null,
-    country: updatedProfile.country ?? null,
-    state: updatedProfile.state ?? null,
-    address: updatedProfile.address ?? null,
-  }
-
-  console.log('🟢 Profile updated successfully')
-  return NextResponse.json({ ok: true, data: response })
 }

@@ -21,38 +21,34 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function sanitizeText(value: unknown, maxLength: number) {
   if (value === undefined) return undefined
   if (typeof value !== 'string') return null
-
   const trimmed = value.trim()
-  if (trimmed.length === 0) return null // Empty strings become null
+  if (trimmed.length === 0) return null
   if (trimmed.length > maxLength) return null
   return trimmed
 }
 
 function validatePhone(phone: string): boolean {
-  // Validación básica para formato internacional
-  // Permite: +1234567890, 1234567890 (mínimo 7 dígitos, máximo 15)
   const phoneRegex = /^\+?[1-9]\d{6,14}$/
   return phoneRegex.test(phone)
 }
 
-function validateProfilePatch(body: unknown) {
-  if (!isRecord(body)) return { error: 'Payload inválido.' }
+function validateProfilePatch(body: unknown): { error: string } | { payload: Partial<Record<ProfileField, string>> } {
+  if (!isRecord(body)) {
+    return { error: 'Payload inválido.' }
+  }
 
-  // Prohibir actualización de email desde este endpoint
   if ('email' in body) {
     return { error: 'No se puede actualizar el email desde este endpoint.' }
   }
 
   const payload: Partial<Record<ProfileField, string>> = {}
 
-  // Validar que solo se envíen campos permitidos
   for (const key of Object.keys(body)) {
     if (!PROFILE_FIELDS.includes(key as ProfileField)) {
       return { error: `Campo no permitido: ${key}` }
     }
   }
 
-  // Procesar cada campo
   for (const field of PROFILE_FIELDS) {
     const value = sanitizeText(body[field], field === 'address' ? 500 : 100)
     
@@ -61,7 +57,6 @@ function validateProfilePatch(body: unknown) {
     }
     
     if (value !== undefined) {
-      // Validación específica para teléfono
       if (field === 'phone' && value !== '') {
         if (!validatePhone(value)) {
           return { error: 'Formato de teléfono inválido. Usa formato internacional (+525500000000).' }
@@ -79,87 +74,132 @@ function validateProfilePatch(body: unknown) {
 }
 
 export async function GET() {
+  console.log('🔵 GET /api/profile - Starting...')
+  
   const supabase = await createApiSupabaseClient()
-  const auth = await getAuthenticatedProfile(supabase)
-
-  if (!auth) {
+  
+  // Usar getUser en lugar de getSession
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  
+  if (userError || !user) {
+    console.log('🔴 No user found:', userError?.message)
     return jsonError('Sesión no autenticada.', 401)
   }
-
-  // Verificar que el perfil existe
-  if (!auth.profile) {
-    return jsonError('Perfil no encontrado.', 404)
+  
+  console.log('✅ User authenticated:', user.email)
+  
+  // Obtener el perfil
+  let { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, name, email, phone, country, state, address')
+    .eq('id', user.id)
+    .single()
+  
+  // Si no existe perfil, crearlo
+  if (profileError && profileError.code === 'PGRST116') {
+    console.log('📝 Creating profile for user')
+    const { data: newProfile, error: createError } = await supabase
+      .from('profiles')
+      .insert({
+        id: user.id,
+        name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+        email: user.email,
+        phone: null,
+        country: null,
+        state: null,
+        address: null
+      })
+      .select()
+      .single()
+    
+    if (createError) {
+      console.error('❌ Error creating profile:', createError)
+      return jsonError('Error al crear perfil', 500)
+    }
+    
+    profile = newProfile
+  } else if (profileError) {
+    console.error('❌ Profile error:', profileError)
+    return jsonError('Error al obtener perfil', 500)
   }
 
-  // Asegurar que devolvemos todos los campos necesarios
-  const profile: ProfileResponse = {
-    id: auth.profile.id,
-    name: auth.profile.name,
-    email: auth.profile.email,
-    phone: auth.profile.phone ?? null,
-    country: auth.profile.country ?? null,
-    state: auth.profile.state ?? null,
-    address: auth.profile.address ?? null,
+  const response: ProfileResponse = {
+    id: profile.id,
+    name: profile.name || '',
+    email: profile.email || '',
+    phone: profile.phone ?? null,
+    country: profile.country ?? null,
+    state: profile.state ?? null,
+    address: profile.address ?? null,
   }
 
-  return NextResponse.json({ ok: true, data: profile })
+  console.log('🟢 Profile returned successfully')
+  return NextResponse.json({ ok: true, data: response })
 }
 
 export async function PATCH(req: Request) {
+  console.log('🔵 PATCH /api/profile - Starting...')
+  
   const supabase = await createApiSupabaseClient()
-  const auth = await getAuthenticatedProfile(supabase)
-
-  if (!auth) {
+  
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  
+  if (userError || !user) {
+    console.log('🔴 No user found')
     return jsonError('Sesión no autenticada.', 401)
   }
 
-  // Parsear y validar el body
   const body = await req.json().catch(() => null)
   if (!body) {
     return jsonError('Payload inválido.', 400)
   }
 
   const validation = validateProfilePatch(body)
+  
   if ('error' in validation) {
     return jsonError(validation.error, 400)
   }
 
-  // Actualizar el perfil usando RPC
-  const { error: rpcError } = await supabase.rpc('update_user_profile', {
-    profile_payload: validation.payload,
-  })
+  // Actualizar perfil
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({
+      name: validation.payload.name,
+      phone: validation.payload.phone,
+      country: validation.payload.country,
+      state: validation.payload.state,
+      address: validation.payload.address,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', user.id)
 
-  if (rpcError) {
-    console.error('RPC Error:', rpcError)
-    return jsonError(rpcError.message, 400)
+  if (updateError) {
+    console.error('❌ Update error:', updateError)
+    return jsonError(updateError.message, 400)
   }
 
-  // Obtener el perfil completo actualizado
+  // Obtener perfil actualizado
   const { data: updatedProfile, error: fetchError } = await supabase
     .from('profiles')
     .select('id, name, email, phone, country, state, address')
-    .eq('id', auth.profile.id)
+    .eq('id', user.id)
     .single()
 
   if (fetchError) {
-    console.error('Error fetching updated profile:', fetchError)
-    return jsonError('Perfil actualizado pero error al recuperar los datos.', 500)
+    console.error('❌ Fetch error:', fetchError)
+    return jsonError('Error al obtener perfil actualizado', 500)
   }
 
-  if (!updatedProfile) {
-    return jsonError('No se encontró el perfil después de la actualización.', 404)
-  }
-
-  // Asegurar el tipo de respuesta
-  const profileResponse: ProfileResponse = {
+  const response: ProfileResponse = {
     id: updatedProfile.id,
-    name: updatedProfile.name,
-    email: updatedProfile.email,
+    name: updatedProfile.name || '',
+    email: updatedProfile.email || '',
     phone: updatedProfile.phone ?? null,
     country: updatedProfile.country ?? null,
     state: updatedProfile.state ?? null,
     address: updatedProfile.address ?? null,
   }
 
-  return NextResponse.json({ ok: true, data: profileResponse })
+  console.log('🟢 Profile updated successfully')
+  return NextResponse.json({ ok: true, data: response })
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore, useAppStore } from '@/lib/store'
+import type { User } from '@/lib/types'
 
 type UserProfile = {
   id: string
@@ -68,12 +69,18 @@ export default function PerfilPage() {
           address: payload.data.address ?? '',
         })
 
-        setUser({
+        // ✅ Ahora todos los campos existen en el tipo User
+        const updatedUser: User = {
           id: payload.data.id,
           name: payload.data.name,
           email: payload.data.email,
           phone: payload.data.phone ?? '',
-        })
+          country: payload.data.country ?? '',
+          state: payload.data.state ?? '',
+          address: payload.data.address ?? '',
+        }
+        
+        setUser(updatedUser)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No pudimos cargar tu perfil.')
       } finally {
@@ -89,7 +96,7 @@ export default function PerfilPage() {
   }, [])
 
   const validatePhone = (phone: string): boolean => {
-    if (!phone) return true // Phone is optional
+    if (!phone) return true
     const phoneRegex = /^\+?[1-9]\d{1,14}$/
     return phoneRegex.test(phone)
   }
@@ -138,8 +145,8 @@ export default function PerfilPage() {
         )
       }
 
-      // Update user store with complete profile data
-      setUser({
+      // ✅ Actualizar todos los campos del usuario
+      const updatedUser: User = {
         id: payload.data.id,
         name: payload.data.name,
         email: payload.data.email,
@@ -147,8 +154,9 @@ export default function PerfilPage() {
         country: payload.data.country ?? '',
         state: payload.data.state ?? '',
         address: payload.data.address ?? '',
-      })
-
+      }
+      
+      setUser(updatedUser)
       showToast('Perfil actualizado correctamente.')
       router.push('/cuenta')
     } catch (err) {

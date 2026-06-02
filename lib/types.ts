@@ -111,6 +111,9 @@ export interface User {
   avatarUrl?: string
   rfc?: string
   razonSocial?: string
+  country?: string | null
+state?: string | null
+address?: string | null
 }
 
 export interface ApiResponse<T> {

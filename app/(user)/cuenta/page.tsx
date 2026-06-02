@@ -198,6 +198,8 @@ export default function CuentaPage() {
             <h2>Pagos y facturación</h2>
 
             <div className="settings-list">
+              <button className="settings-row" onClick={() => router.push('/cuenta/pagos')}>Mis pagos <span>›</span></button>
+
               <button
                 type="button"
                 className="settings-row"

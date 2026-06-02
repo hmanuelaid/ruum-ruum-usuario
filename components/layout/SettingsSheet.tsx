@@ -30,6 +30,11 @@ export default function SettingsSheet() {
     router.refresh()
   }
 
+  function goTo(path: string) {
+    setSettingsOpen(false)
+    router.push(path)
+  }
+
   return (
     <div
       className={`sheet-backdrop${settingsOpen ? ' open' : ''}`}
@@ -61,22 +66,22 @@ export default function SettingsSheet() {
 
         <div className="settings-group">
           <h3>Cuenta</h3>
-          <button className="settings-row">Perfil <span>›</span></button>
-          <button className="settings-row">Mis vehículos <span>›</span></button>
-          <button className="settings-row">Métodos de pago <span>›</span></button>
-          <button className="settings-row">Facturación <span>›</span></button>
+          <button className="settings-row" onClick={() => goTo('/cuenta/perfil')}>Perfil <span>›</span></button>
+          <button className="settings-row" onClick={() => goTo('/cuenta/vehiculos')}>Mis vehículos <span>›</span></button>
+          <button className="settings-row" onClick={() => goTo('/cuenta/pagos')}>Métodos de pago <span>›</span></button>
+          <button className="settings-row" onClick={() => goTo('/cuenta/pagos')}>Facturación <span>›</span></button>
         </div>
 
         <div className="settings-group">
           <h3>Preferencias</h3>
-          <button className="settings-row">Notificaciones <span>Activas</span></button>
-          <button className="settings-row">Idioma <span>Español</span></button>
+          <button className="settings-row" onClick={() => goTo('/notificaciones')}>Notificaciones <span>Activas</span></button>
+          <button className="settings-row" onClick={() => showToast('Idioma disponible próximamente.')}>Idioma <span>Español</span></button>
         </div>
 
         <div className="settings-group">
           <h3>Legal</h3>
-          <button className="settings-row">Términos y condiciones <span>›</span></button>
-          <button className="settings-row">Aviso de privacidad <span>›</span></button>
+          <button className="settings-row" onClick={() => showToast('Términos y condiciones estará disponible próximamente.')}>Términos y condiciones <span>›</span></button>
+          <button className="settings-row" onClick={() => showToast('Aviso de privacidad estará disponible próximamente.')}>Aviso de privacidad <span>›</span></button>
         </div>
 
         <button className="btn-secondary" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={handleLogout} disabled={loggingOut}>

@@ -1,22 +1,20 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore, useAppStore } from '@/lib/store'
+import { useAuthStore } from '@/lib/store'
+import { useAppStore } from '@/lib/store'
 
 type UserProfile = {
   id: string
   name: string
   email: string
   phone?: string | null
-  country?: string | null
-  state?: string | null
-  address?: string | null
 }
 
 type ApiResponse<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string }
+  | { ok: false; error?: string }
 
 export default function PerfilPage() {
   const router = useRouter()
@@ -26,9 +24,6 @@ export default function PerfilPage() {
   const [form, setForm] = useState({
     name: '',
     phone: '',
-    country: '',
-    state: '',
-    address: '',
   })
 
   const [loading, setLoading] = useState(true)
@@ -63,9 +58,6 @@ export default function PerfilPage() {
         setForm({
           name: payload.data.name ?? '',
           phone: payload.data.phone ?? '',
-          country: payload.data.country ?? '',
-          state: payload.data.state ?? '',
-          address: payload.data.address ?? '',
         })
 
         setUser({
@@ -84,26 +76,15 @@ export default function PerfilPage() {
     void loadProfile()
   }, [router, setUser])
 
-  const setField = useCallback((field: keyof typeof form, value: string) => {
+  function set(field: 'name' | 'phone', value: string) {
     setForm((current) => ({ ...current, [field]: value }))
-  }, [])
-
-  const validatePhone = (phone: string): boolean => {
-    if (!phone) return true // Phone is optional
-    const phoneRegex = /^\+?[1-9]\d{1,14}$/
-    return phoneRegex.test(phone)
   }
 
-  const handleSubmit = useCallback(async (event: React.FormEvent) => {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
 
     if (!form.name.trim()) {
       setError('El nombre es obligatorio.')
-      return
-    }
-
-    if (form.phone && !validatePhone(form.phone)) {
-      setError('Formato de teléfono inválido. Usa formato internacional (+525500000000)')
       return
     }
 
@@ -116,10 +97,7 @@ export default function PerfilPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: form.name.trim(),
-          phone: form.phone.trim() || null,
-          country: form.country.trim() || null,
-          state: form.state.trim() || null,
-          address: form.address.trim() || null,
+          phone: form.phone.trim(),
         }),
       })
 
@@ -138,25 +116,21 @@ export default function PerfilPage() {
         )
       }
 
-      // Update user store with complete profile data
       setUser({
         id: payload.data.id,
         name: payload.data.name,
         email: payload.data.email,
         phone: payload.data.phone ?? '',
-        country: payload.data.country ?? '',
-        state: payload.data.state ?? '',
-        address: payload.data.address ?? '',
       })
 
-      showToast('Perfil actualizado correctamente.')
+      showToast('Perfil actualizado.')
       router.push('/cuenta')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No pudimos guardar tu perfil.')
     } finally {
       setSaving(false)
     }
-  }, [form.name, form.phone, form.country, form.state, form.address, router, setUser, showToast])
+  }
 
   return (
     <main className="page-shell">
@@ -177,11 +151,11 @@ export default function PerfilPage() {
           <p className="muted">Cargando perfil…</p>
         ) : (
           <form className="auth-form" onSubmit={handleSubmit}>
-            <label className="field-label">Nombre completo *</label>
+            <label className="field-label">Nombre completo</label>
             <input
               className="field-input"
               value={form.name}
-              onChange={(event) => setField('name', event.target.value)}
+              onChange={(event) => set('name', event.target.value)}
               placeholder="Tu nombre"
               required
             />
@@ -191,46 +165,14 @@ export default function PerfilPage() {
               className="field-input"
               type="tel"
               value={form.phone}
-              onChange={(event) => setField('phone', event.target.value)}
+              onChange={(event) => set('phone', event.target.value)}
               placeholder="+525500000000"
-            />
-            <p className="field-hint">Formato internacional: + código país y número</p>
-
-            <label className="field-label">País</label>
-            <input
-              className="field-input"
-              value={form.country}
-              onChange={(event) => setField('country', event.target.value)}
-              placeholder="Tu país"
-            />
-
-            <label className="field-label">Estado/Provincia</label>
-            <input
-              className="field-input"
-              value={form.state}
-              onChange={(event) => setField('state', event.target.value)}
-              placeholder="Tu estado o provincia"
-            />
-
-            <label className="field-label">Dirección</label>
-            <textarea
-              className="field-input"
-              value={form.address}
-              onChange={(event) => setField('address', event.target.value)}
-              placeholder="Tu dirección completa"
-              rows={3}
             />
 
             {user?.email && (
               <>
                 <label className="field-label">Correo electrónico</label>
-                <input 
-                  className="field-input" 
-                  value={user.email} 
-                  disabled 
-                  style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
-                />
-                <p className="field-hint">El correo electrónico no se puede modificar desde aquí.</p>
+                <input className="field-input" value={user.email} disabled />
               </>
             )}
 
@@ -246,19 +188,6 @@ export default function PerfilPage() {
           </form>
         )}
       </section>
-
-      <style jsx>{`
-        .field-hint {
-          font-size: 0.75rem;
-          color: #666;
-          margin-top: -0.5rem;
-          margin-bottom: 1rem;
-        }
-        textarea.field-input {
-          resize: vertical;
-          min-height: 80px;
-        }
-      `}</style>
     </main>
   )
 }

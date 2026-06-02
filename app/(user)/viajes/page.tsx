@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
 import { Chip } from '@/components/ui/Chip'
 import { createClient } from '@/lib/supabase'
@@ -38,27 +37,9 @@ export default function ViajesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const { user } = useAuthStore()
-  const router = useRouter()
 
   useEffect(() => {
-    if (!user) {
-      let cancelled = false
-
-      async function verifySession() {
-        const supabase = createClient()
-        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
-
-        if (!cancelled && (authError || !authUser)) {
-          router.replace('/login?redirectTo=/viajes')
-        }
-      }
-
-      void verifySession()
-
-      return () => {
-        cancelled = true
-      }
-    }
+    if (!user) return
 
     const userId = user.id
     let cancelled = false
@@ -94,7 +75,7 @@ export default function ViajesPage() {
 
     void loadTrips()
     return () => { cancelled = true }
-  }, [router, user, tab])
+  }, [user, tab])
 
   return (
     <>

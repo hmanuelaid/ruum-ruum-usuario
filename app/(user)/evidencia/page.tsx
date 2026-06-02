@@ -1,6 +1,5 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Chip } from '@/components/ui/Chip'
 import { useAuthStore } from '@/lib/store'
 import { createClient } from '@/lib/supabase'
@@ -87,31 +86,13 @@ function EvidenceCard({
 
 export default function EvidenciaPage() {
   const { user } = useAuthStore()
-  const router = useRouter()
   const [selected, setSelected] = useState<string | null>(null)
   const [trips, setTrips] = useState<EvidenceTrip[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!user) {
-      let cancelled = false
-
-      async function verifySession() {
-        const supabase = createClient()
-        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
-
-        if (!cancelled && (authError || !authUser)) {
-          router.replace('/login?redirectTo=/evidencia')
-        }
-      }
-
-      void verifySession()
-
-      return () => {
-        cancelled = true
-      }
-    }
+    if (!user) return
 
     const userId = user.id
     let cancelled = false
@@ -162,7 +143,7 @@ export default function EvidenciaPage() {
 
     void loadEvidence()
     return () => { cancelled = true }
-  }, [router, user])
+  }, [user])
 
   const trip = trips.find(t => t.id === selected) ?? null
   const inicial = trip?.evidence?.find(e => e.type === 'inicial')

@@ -1,196 +1,501 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
-import { useAuthStore } from '@/lib/store'
-import { createClient } from '@/lib/supabase'
-import { Chip } from '@/components/ui/Chip'
 
-const STATUS_LABELS: Record<string, string> = {
-  pendiente:   'Pendiente',
-  en_revision: 'En revisión',
-  aprobado:    'Aprobado',
-  rechazado:   'Rechazado',
-  pagado:      'Pagado',
-  revocado:    'Revocado',
-  ajustado:    'Ajustado',
-}
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAppStore } from '@/lib/store'
 
-const METHOD_LABELS: Record<string, string> = {
-  tarjeta:     '💳 Tarjeta',
-  transferencia: '🏦 Transferencia',
-  efectivo:    '💵 Efectivo',
-  oxxo:        '🏪 OXXO',
-}
-
-interface Payment {
+interface PaymentMethod {
   id: string
-  trip_id: string
-  type: string
-  amount: number
-  status: string
-  method: string | null
-  concept: string | null
-  created_at: string
-  paid_at: string | null
+  type: 'tarjeta' | 'transferencia' | 'paypal' | 'oxxo' | 'mercadopago'
+  label: string
+  detail: string
+  icon: string
+  default: boolean
 }
 
-export default function PagosPage() {
-  const { user } = useAuthStore()
-  const [payments, setPayments] = useState<Payment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'todos' | 'pendientes' | 'pagados'>('todos')
+const MOCK_METHODS: PaymentMethod[] = [
+  {
+    id: 'pm_001',
+    type: 'tarjeta',
+    label: 'Visa terminada en 4242',
+    detail: 'Vence 12/26',
+    icon: '💳',
+    default: true,
+  },
+  {
+    id: 'pm_002',
+    type: 'paypal',
+    label: 'PayPal',
+    detail: 'carlos@ejemplo.com',
+    icon: '🅿️',
+    default: false,
+  },
+]
 
-  const loadPayments = useCallback(async () => {
-    if (!user) return
+const ADD_OPTIONS: {
+  type: PaymentMethod['type']
+  icon: string
+  label: string
+  desc: string
+}[] = [
+  { type: 'tarjeta', icon: '💳', label: 'Tarjeta de débito o crédito', desc: 'Visa, Mastercard, AMEX' },
+  { type: 'transferencia', icon: '🏦', label: 'Transferencia bancaria (SPEI)', desc: 'CLABE interbancaria' },
+  { type: 'paypal', icon: '🅿️', label: 'PayPal', desc: 'Paga con tu cuenta PayPal' },
+  { type: 'oxxo', icon: '🏪', label: 'OXXO Pay', desc: 'Paga en efectivo en OXXO' },
+  { type: 'mercadopago', icon: '💙', label: 'Mercado Pago', desc: 'Saldo o tarjeta guardada' },
+]
 
-    await Promise.resolve()
+type Sheet = 'add_select' | 'add_card' | 'add_transfer' | null
+
+export default function MetodosPagoPage() {
+  const router = useRouter()
+  const { showToast } = useAppStore()
+  const [methods, setMethods] = useState<PaymentMethod[]>(MOCK_METHODS)
+  const [sheet, setSheet] = useState<Sheet>(null)
+  const [cardForm, setCardForm] = useState({ number: '', name: '', expiry: '', cvv: '' })
+  const [transferForm, setTransferForm] = useState({ clabe: '', bank: '', alias: '' })
+  const [loading, setLoading] = useState(false)
+
+  function setDefault(id: string) {
+    setMethods((current) => current.map((method) => ({ ...method, default: method.id === id })))
+    showToast('Método predeterminado actualizado ✓')
+  }
+
+  function removeMethod(id: string) {
+    setMethods((current) => current.filter((method) => method.id !== id))
+    showToast('Método eliminado')
+  }
+
+  async function handleAddCard(event: React.FormEvent) {
+    event.preventDefault()
     setLoading(true)
-    const supabase = createClient()
 
-    // Obtener viajes del usuario para luego buscar sus pagos
-    const { data: trips } = await supabase
-      .from('trips')
-      .select('id')
-      .eq('user_id', user!.id)
+    await new Promise((resolve) => setTimeout(resolve, 900))
 
-    if (!trips || trips.length === 0) {
-      setPayments([])
-      setLoading(false)
+    const last4 = cardForm.number.replace(/\s/g, '').slice(-4)
+    setMethods((current) => [
+      ...current,
+      {
+        id: `pm_${Date.now()}`,
+        type: 'tarjeta',
+        label: `Tarjeta terminada en ${last4}`,
+        detail: `Vence ${cardForm.expiry}`,
+        icon: '💳',
+        default: current.length === 0,
+      },
+    ])
+
+    setCardForm({ number: '', name: '', expiry: '', cvv: '' })
+    setSheet(null)
+    setLoading(false)
+    showToast('Tarjeta agregada ✓')
+  }
+
+  async function handleAddTransfer(event: React.FormEvent) {
+    event.preventDefault()
+    setLoading(true)
+
+    await new Promise((resolve) => setTimeout(resolve, 700))
+
+    setMethods((current) => [
+      ...current,
+      {
+        id: `pm_${Date.now()}`,
+        type: 'transferencia',
+        label: transferForm.alias || 'Transferencia SPEI',
+        detail: `CLABE: ****${transferForm.clabe.slice(-4)}`,
+        icon: '🏦',
+        default: current.length === 0,
+      },
+    ])
+
+    setTransferForm({ clabe: '', bank: '', alias: '' })
+    setSheet(null)
+    setLoading(false)
+    showToast('Cuenta SPEI agregada ✓')
+  }
+
+  function handleSelectAddType(type: PaymentMethod['type']) {
+    if (type === 'tarjeta') {
+      setSheet('add_card')
       return
     }
 
-    const tripIds = trips.map(t => t.id)
+    if (type === 'transferencia') {
+      setSheet('add_transfer')
+      return
+    }
 
-    const { data } = await supabase
-      .from('payments')
-      .select('*')
-      .in('trip_id', tripIds)
-      .eq('type', 'cobro_usuario')
-      .order('created_at', { ascending: false })
+    const option = ADD_OPTIONS.find((item) => item.type === type)
 
-    setPayments((data ?? []) as Payment[])
-    setLoading(false)
-  }, [user])
+    setMethods((current) => [
+      ...current,
+      {
+        id: `pm_${Date.now()}`,
+        type,
+        label: option?.label ?? type,
+        detail: 'Conectado',
+        icon: option?.icon ?? '💰',
+        default: current.length === 0,
+      },
+    ])
 
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void loadPayments()
-    }, 0)
+    setSheet(null)
+    showToast(`${option?.label ?? type} agregado ✓`)
+  }
 
-    return () => window.clearTimeout(timeout)
-  }, [loadPayments])
+  function formatCard(value: string) {
+    return value.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim()
+  }
 
-  const filtered = payments.filter(p => {
-    if (tab === 'pendientes') return p.status === 'pendiente' || p.status === 'en_revision'
-    if (tab === 'pagados')    return p.status === 'pagado'
-    return true
-  })
-
-  const totalPagado   = payments.filter(p => p.status === 'pagado').reduce((s, p) => s + Number(p.amount), 0)
-  const totalPendiente = payments.filter(p => p.status === 'pendiente').reduce((s, p) => s + Number(p.amount), 0)
+  function formatExpiry(value: string) {
+    return value.replace(/\D/g, '').slice(0, 4).replace(/^(\d{2})(\d)/, '$1/$2')
+  }
 
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-        <button onClick={() => history.back()}
-          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20 }}>
+        <button
+          type="button"
+          onClick={() => router.back()}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            fontSize: 20,
+          }}
+        >
           ←
         </button>
-        <h1 style={{ fontSize: 20, fontWeight: 800 }}>Mis pagos</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 800 }}>Métodos de pago</h1>
       </div>
 
-      {/* Métricas */}
-      {!loading && (
-        <div className="metric-grid">
-          <div className="metric-card">
-            <p className="value" style={{ fontSize: 20, color: 'var(--success)' }}>
-              ${totalPagado.toLocaleString('es-MX')}
-            </p>
-            <p className="label">Total pagado</p>
+      <section>
+        <p className="kicker" style={{ marginBottom: 10 }}>Tus métodos guardados</p>
+        {methods.length === 0 ? (
+          <div className="card" style={{ textAlign: 'center', padding: '28px 16px' }}>
+            <p style={{ fontSize: 28, marginBottom: 8 }}>💳</p>
+            <p style={{ fontWeight: 600, marginBottom: 4 }}>Sin métodos guardados</p>
+            <p className="muted" style={{ fontSize: 13 }}>Agrega un método para agilizar tus pagos.</p>
           </div>
-          <div className="metric-card">
-            <p className="value" style={{ fontSize: 20, color: 'var(--warning)' }}>
-              ${totalPendiente.toLocaleString('es-MX')}
-            </p>
-            <p className="label">Pendiente</p>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="segmented">
-        {([
-          { key: 'todos',      label: 'Todos' },
-          { key: 'pendientes', label: 'Pendientes' },
-          { key: 'pagados',    label: 'Pagados' },
-        ] as const).map(t => (
-          <button key={t.key}
-            className={tab === t.key ? 'active' : ''}
-            onClick={() => setTab(t.key)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Lista */}
-      {loading ? (
-        <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>
-          <p className="muted">Cargando pagos…</p>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>
-          <p style={{ fontSize: 28, marginBottom: 8 }}>💳</p>
-          <p style={{ fontWeight: 600, marginBottom: 4 }}>Sin pagos aquí</p>
-          <p className="muted" style={{ fontSize: 13 }}>
-            {tab === 'pendientes'
-              ? 'No tienes pagos pendientes.'
-              : tab === 'pagados'
-              ? 'Aún no tienes pagos completados.'
-              : 'Tus pagos aparecerán aquí una vez que solicites un traslado.'}
-          </p>
-        </div>
-      ) : (
-        <div className="stack">
-          {filtered.map(p => (
-            <article key={p.id} className="list-card">
-              <div style={{ flex: 1 }}>
-                <p className="kicker" style={{ marginBottom: 4 }}>{p.trip_id}</p>
-                <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
-                  {p.concept ?? 'Traslado'}
-                </p>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                  {p.method && (
-                    <span className="muted" style={{ fontSize: 12 }}>
-                      {METHOD_LABELS[p.method] ?? p.method}
-                    </span>
+        ) : (
+          <div className="stack">
+            {methods.map((method) => (
+              <div
+                key={method.id}
+                className="card"
+                style={{ display: 'flex', alignItems: 'center', gap: 14 }}
+              >
+                <div
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 12,
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--border)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    fontSize: '1.4rem',
+                    flexShrink: 0,
+                  }}
+                >
+                  {method.icon}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <p style={{ fontWeight: 600, fontSize: 14 }}>{method.label}</p>
+                    {method.default && (
+                      <span className="chip chip-success" style={{ fontSize: 10 }}>
+                        Predeterminado
+                      </span>
+                    )}
+                  </div>
+                  <p className="muted" style={{ fontSize: 12 }}>{method.detail}</p>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {!method.default && (
+                    <button
+                      type="button"
+                      className="btn-mini"
+                      onClick={() => setDefault(method.id)}
+                      title="Establecer como predeterminado"
+                    >
+                      ★
+                    </button>
                   )}
-                  <span className="muted" style={{ fontSize: 12 }}>
-                    {new Date(p.created_at).toLocaleDateString('es-MX', { dateStyle: 'medium' })}
-                  </span>
-                  {p.paid_at && (
-                    <span style={{ fontSize: 12, color: 'var(--success)' }}>
-                      ✓ Pagado {new Date(p.paid_at).toLocaleDateString('es-MX')}
-                    </span>
-                  )}
+                  <button
+                    type="button"
+                    className="btn-mini"
+                    style={{ color: 'var(--danger)' }}
+                    onClick={() => removeMethod(method.id)}
+                    title="Eliminar"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width={14}
+                      height={14}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6l-1 14H6L5 6" />
+                      <path d="M10 11v6" />
+                      <path d="M14 11v6" />
+                      <path d="M9 6V4h6v2" />
+                    </svg>
+                  </button>
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                <p style={{ fontWeight: 800, fontSize: 16 }}>
-                  ${Number(p.amount).toLocaleString('es-MX')}
-                </p>
-                <Chip status={p.status}>{STATUS_LABELS[p.status] ?? p.status}</Chip>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </section>
 
-      {/* Info */}
-      <div className="card" style={{ padding: '16px', background: 'var(--surface-2)' }}>
-        <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>ℹ️ Sobre los pagos</p>
+      <button
+        type="button"
+        className="btn-primary"
+        onClick={() => setSheet('add_select')}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+      >
+        <span style={{ fontSize: 18 }}>+</span> Agregar método de pago
+      </button>
+
+      <div className="card" style={{ background: 'var(--surface-2)', padding: '14px 16px' }}>
+        <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>🔒 Pago seguro</p>
         <p className="muted" style={{ fontSize: 12, lineHeight: 1.6 }}>
-          Los pagos se procesan al confirmar la entrega del vehículo. Si tienes alguna
-          duda sobre un cobro, contáctanos desde la sección de soporte.
+          Tus datos de pago están encriptados y protegidos. Ruum Ruum nunca almacena
+          números de tarjeta completos ni CVV.
         </p>
+      </div>
+
+      <div
+        className={`sheet-backdrop${sheet === 'add_select' ? ' open' : ''}`}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setSheet(null)
+        }}
+      >
+        <div className="sheet">
+          <div className="sheet-handle" />
+          <div className="sheet-header">
+            <p style={{ fontWeight: 700, fontSize: 16 }}>Agregar método de pago</p>
+            <button type="button" className="btn-icon" onClick={() => setSheet(null)}>✕</button>
+          </div>
+          <div className="stack">
+            {ADD_OPTIONS.map((option) => (
+              <button
+                key={option.type}
+                type="button"
+                onClick={() => handleSelectAddType(option.type)}
+                style={{
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 14,
+                  cursor: 'pointer',
+                  color: 'var(--text)',
+                  textAlign: 'left',
+                  width: '100%',
+                }}
+              >
+                <span style={{ fontSize: '1.6rem', width: 36, textAlign: 'center' }}>{option.icon}</span>
+                <div>
+                  <p style={{ fontWeight: 600, fontSize: 14 }}>{option.label}</p>
+                  <p className="muted" style={{ fontSize: 12 }}>{option.desc}</p>
+                </div>
+                <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>›</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={`sheet-backdrop${sheet === 'add_card' ? ' open' : ''}`}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setSheet(null)
+        }}
+      >
+        <div className="sheet">
+          <div className="sheet-handle" />
+          <div className="sheet-header">
+            <p style={{ fontWeight: 700, fontSize: 16 }}>💳 Agregar tarjeta</p>
+            <button type="button" className="btn-icon" onClick={() => setSheet(null)}>✕</button>
+          </div>
+
+          <div
+            style={{
+              background: 'linear-gradient(135deg, var(--primary) 0%, #4f46e5 100%)',
+              borderRadius: 14,
+              padding: '20px 22px',
+              color: '#fff',
+              minHeight: 140,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p style={{ fontWeight: 800, fontSize: 16 }}>Ruum Ruum</p>
+              <span style={{ fontSize: 20 }}>💳</span>
+            </div>
+            <p style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.15em', fontFamily: 'monospace' }}>
+              {cardForm.number || '•••• •••• •••• ••••'}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+              <span>{cardForm.name || 'NOMBRE TITULAR'}</span>
+              <span>{cardForm.expiry || 'MM/AA'}</span>
+            </div>
+          </div>
+
+          <form onSubmit={handleAddCard} className="form-section">
+            <div className="field-group">
+              <label className="field-label">Número de tarjeta</label>
+              <input
+                className="field-input"
+                placeholder="1234 5678 9012 3456"
+                value={cardForm.number}
+                inputMode="numeric"
+                onChange={(event) => setCardForm((current) => ({
+                  ...current,
+                  number: formatCard(event.target.value),
+                }))}
+                maxLength={19}
+                required
+              />
+            </div>
+            <div className="field-group">
+              <label className="field-label">Nombre del titular</label>
+              <input
+                className="field-input"
+                placeholder="Como aparece en la tarjeta"
+                value={cardForm.name}
+                onChange={(event) => setCardForm((current) => ({
+                  ...current,
+                  name: event.target.value.toUpperCase(),
+                }))}
+                required
+              />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="field-group">
+                <label className="field-label">Fecha de vencimiento</label>
+                <input
+                  className="field-input"
+                  placeholder="MM/AA"
+                  inputMode="numeric"
+                  value={cardForm.expiry}
+                  onChange={(event) => setCardForm((current) => ({
+                    ...current,
+                    expiry: formatExpiry(event.target.value),
+                  }))}
+                  maxLength={5}
+                  required
+                />
+              </div>
+              <div className="field-group">
+                <label className="field-label">CVV</label>
+                <input
+                  className="field-input"
+                  placeholder="•••"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={cardForm.cvv}
+                  onChange={(event) => setCardForm((current) => ({
+                    ...current,
+                    cvv: event.target.value.replace(/\D/g, ''),
+                  }))}
+                  required
+                />
+              </div>
+            </div>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Guardando…' : 'Guardar tarjeta'}
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div
+        className={`sheet-backdrop${sheet === 'add_transfer' ? ' open' : ''}`}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setSheet(null)
+        }}
+      >
+        <div className="sheet">
+          <div className="sheet-handle" />
+          <div className="sheet-header">
+            <p style={{ fontWeight: 700, fontSize: 16 }}>🏦 Cuenta SPEI</p>
+            <button type="button" className="btn-icon" onClick={() => setSheet(null)}>✕</button>
+          </div>
+          <form onSubmit={handleAddTransfer} className="form-section">
+            <div className="field-group">
+              <label className="field-label">CLABE interbancaria (18 dígitos)</label>
+              <input
+                className="field-input"
+                placeholder="000000000000000000"
+                inputMode="numeric"
+                maxLength={18}
+                value={transferForm.clabe}
+                onChange={(event) => setTransferForm((current) => ({
+                  ...current,
+                  clabe: event.target.value.replace(/\D/g, ''),
+                }))}
+                required
+              />
+            </div>
+            <div className="field-group">
+              <label className="field-label">Banco</label>
+              <select
+                className="field-input"
+                value={transferForm.bank}
+                onChange={(event) => setTransferForm((current) => ({
+                  ...current,
+                  bank: event.target.value,
+                }))}
+              >
+                <option value="">Selecciona tu banco</option>
+                {[
+                  'BBVA',
+                  'Banamex',
+                  'Santander',
+                  'Banorte',
+                  'HSBC',
+                  'Scotiabank',
+                  'Inbursa',
+                  'Azteca',
+                  'Spin by OXXO',
+                  'Nu',
+                  'Hey Banco',
+                ].map((bank) => (
+                  <option key={bank} value={bank}>{bank}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field-group">
+              <label className="field-label">Alias (opcional)</label>
+              <input
+                className="field-input"
+                placeholder="Ej. Mi cuenta BBVA"
+                value={transferForm.alias}
+                onChange={(event) => setTransferForm((current) => ({
+                  ...current,
+                  alias: event.target.value,
+                }))}
+              />
+            </div>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Guardando…' : 'Guardar cuenta'}
+            </button>
+          </form>
+        </div>
       </div>
     </>
   )

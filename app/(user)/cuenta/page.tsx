@@ -112,10 +112,6 @@ export default function CuentaPage() {
     router.refresh()
   }
 
-  function comingSoon(label: string) {
-    showToast(`${label} estará disponible próximamente.`)
-  }
-
   const displayName = profile?.name ?? user?.name ?? 'Usuario'
   const displayEmail = profile?.email ?? user?.email ?? ''
   const displayPhone = profile?.phone ?? user?.phone ?? ''
@@ -198,16 +194,14 @@ export default function CuentaPage() {
             <h2>Pagos y facturación</h2>
 
             <div className="settings-list">
-              <button className="settings-row" onClick={() => router.push('/cuenta/pagos')}>Mis pagos <span>›</span></button>
-
               <button
                 type="button"
                 className="settings-row"
-                onClick={() => comingSoon('Métodos de pago')}
+                onClick={() => router.push('/cuenta/pagos')}
               >
                 <span>
                   <strong>Métodos de pago</strong>
-                  <small>Disponible próximamente</small>
+                  <small>Agrega o administra tus métodos guardados</small>
                 </span>
                 <span aria-hidden="true">›</span>
               </button>
@@ -215,11 +209,11 @@ export default function CuentaPage() {
               <button
                 type="button"
                 className="settings-row"
-                onClick={() => comingSoon('Facturación')}
+                onClick={() => router.push('/cuenta/pagos')}
               >
                 <span>
                   <strong>Facturación</strong>
-                  <small>Disponible próximamente</small>
+                  <small>Consulta y administra tus pagos</small>
                 </span>
                 <span aria-hidden="true">›</span>
               </button>

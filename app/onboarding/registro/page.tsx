@@ -69,8 +69,25 @@ export default function RegistroPage() {
       return
     }
 
+    let authUser = signUpData.user
+
+    if (!signUpData.session) {
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: form.password,
+      })
+
+      if (signInError || !signInData.user) {
+        setError('Cuenta creada. Confirma tu correo e inicia sesión para continuar.')
+        setLoading(false)
+        return
+      }
+
+      authUser = signInData.user
+    }
+
     const profilePayload = {
-      auth_id: signUpData.user.id,
+      auth_id: authUser.id,
       name,
       email,
       phone,
@@ -81,7 +98,7 @@ export default function RegistroPage() {
     const { data: existingProfile, error: existingError } = await supabase
       .from('app_users')
       .select('id')
-      .eq('auth_id', signUpData.user.id)
+      .eq('auth_id', authUser.id)
       .maybeSingle()
 
     if (existingError) {
@@ -111,12 +128,6 @@ export default function RegistroPage() {
       return
     }
 
-    if (!signUpData.session) {
-      setError('Cuenta creada. Revisa tu correo para confirmar tu cuenta e inicia sesión.')
-      setLoading(false)
-      return
-    }
-
     setUser({
       id: profile.id,
       name: profile.name,
@@ -124,7 +135,7 @@ export default function RegistroPage() {
       email: profile.email,
     })
 
-    router.push('/onboarding/documentos')
+    window.location.assign('/onboarding/documentos')
   }
 
   return (

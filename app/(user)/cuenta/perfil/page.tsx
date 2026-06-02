@@ -41,7 +41,7 @@ export default function PerfilPage() {
         })
 
         if (response.status === 401) {
-          router.replace('/login')
+          router.replace('/login?redirectTo=/cuenta/perfil')
           return
         }
 
@@ -104,7 +104,7 @@ export default function PerfilPage() {
       const payload = (await response.json().catch(() => null)) as ApiResponse<UserProfile> | null
 
       if (response.status === 401) {
-        router.replace('/login')
+        router.replace('/login?redirectTo=/cuenta/perfil')
         return
       }
 

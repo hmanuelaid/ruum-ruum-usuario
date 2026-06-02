@@ -157,7 +157,7 @@ export default function VehiculosPage() {
       })
 
       if (response.status === 401) {
-        router.replace('/login')
+        router.replace('/login?redirectTo=/cuenta/vehiculos')
         return
       }
 
@@ -249,7 +249,7 @@ export default function VehiculosPage() {
       })
 
       if (response.status === 401) {
-        router.replace('/login')
+        router.replace('/login?redirectTo=/cuenta/vehiculos')
         return
       }
 
@@ -301,7 +301,7 @@ export default function VehiculosPage() {
       })
 
       if (response.status === 401) {
-        router.replace('/login')
+        router.replace('/login?redirectTo=/cuenta/vehiculos')
         return
       }
 

@@ -20,28 +20,53 @@ export default function LoginPage() {
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
     if (authError) { setError('Correo o contraseña incorrectos'); setLoading(false); return }
 
-    const { data: profile } = await supabase
+    const { data: existingProfile, error: profileLookupError } = await supabase
       .from('app_users')
       .select('id, name, phone, email')
       .eq('auth_id', data.user.id)
       .maybeSingle()
 
-    if (!profile) {
+    if (profileLookupError) {
       await supabase.auth.signOut()
-      setError('Perfil no encontrado')
+      setError(`No pudimos cargar tu perfil: ${profileLookupError.message}`)
       setLoading(false)
       return
     }
 
-    setUser({ id: profile.id, name: profile.name, phone: profile.phone, email: profile.email })
+    let profile = existingProfile
+
+    if (!profile) {
+      const { data: createdProfile, error: createProfileError } = await supabase
+        .from('app_users')
+        .insert({
+          auth_id: data.user.id,
+          name: data.user.user_metadata?.name ?? data.user.email?.split('@')[0] ?? 'Usuario',
+          phone: data.user.user_metadata?.phone ?? '',
+          email: data.user.email ?? email,
+          type: 'personal',
+          status: 'activo',
+        })
+        .select('id, name, phone, email')
+        .single()
+
+      if (createProfileError || !createdProfile) {
+        await supabase.auth.signOut()
+        setError(createProfileError?.message ?? 'No pudimos crear tu perfil.')
+        setLoading(false)
+        return
+      }
+
+      profile = createdProfile
+    }
+
+    setUser({ id: profile.id, name: profile.name, phone: profile.phone ?? '', email: profile.email })
 
     const redirectTo = new URLSearchParams(window.location.search).get('redirectTo')
     const destination = redirectTo?.startsWith('/') && !redirectTo.startsWith('//')
       ? redirectTo
       : '/inicio'
 
-    router.replace(destination)
-    router.refresh()
+    window.location.assign(destination)
   }
 
   return (

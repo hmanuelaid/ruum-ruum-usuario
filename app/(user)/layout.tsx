@@ -33,11 +33,30 @@ async function getAuthenticatedProfile(): Promise<User> {
     redirect('/login')
   }
 
-  const { data: profile } = await supabase
+  const { data: existingProfile } = await supabase
     .from('app_users')
     .select('id, name, phone, email')
     .eq('auth_id', authUser.id)
     .maybeSingle()
+
+  let profile = existingProfile
+
+  if (!profile) {
+    const { data: createdProfile } = await supabase
+      .from('app_users')
+      .insert({
+        auth_id: authUser.id,
+        name: authUser.user_metadata?.name ?? authUser.email?.split('@')[0] ?? 'Usuario',
+        phone: authUser.user_metadata?.phone ?? '',
+        email: authUser.email ?? '',
+        type: 'personal',
+        status: 'activo',
+      })
+      .select('id, name, phone, email')
+      .single()
+
+    profile = createdProfile
+  }
 
   if (!profile) {
     redirect('/login')

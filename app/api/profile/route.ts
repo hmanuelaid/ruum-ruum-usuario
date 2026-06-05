@@ -84,11 +84,12 @@ export async function GET() {
     }
     
     // Obtener el perfil
-    let { data: profile, error: profileError } = await supabase
+    const { data, error: profileError } = await supabase
       .from('profiles')
       .select('id, name, email, phone, country, state, address')
       .eq('id', user.id)
       .single()
+    let profile = data
     
     // Si no existe perfil, crearlo
     if (profileError && profileError.code === 'PGRST116') {

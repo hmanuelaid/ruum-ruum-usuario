@@ -1,4 +1,6 @@
 // ─── lib/types.ts ─────────────────────────────────────────────────────────────
+import type { TripStatus } from '@ruum/types'
+export type { TripStatus } from '@ruum/types'
 
 export type VehicleType =
   | 'sedan' | 'suv' | 'pickup' | 'van' | 'moto' | 'otro'
@@ -8,12 +10,6 @@ export type TransmissionType = 'automatica' | 'manual'
 export type ServiceType =
   | 'personal' | 'empresarial' | 'agencia' | 'lote'
   | 'flotilla' | 'entrega_cliente' | 'recuperacion' | 'especial'
-
-export type TripStatus =
-  | 'solicitud_recibida' | 'en_revision' | 'conductor_asignado'
-  | 'en_camino_origen' | 'recoleccion_proceso' | 'vehiculo_documentado'
-  | 'traslado_curso' | 'llegando_destino' | 'entrega_proceso'
-  | 'finalizado' | 'cancelado' | 'incidente'
 
 export interface Vehicle {
   id: string

@@ -1,5 +1,6 @@
 // lib/apiAuth.ts
 import { createServerClient } from '@supabase/ssr'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
@@ -16,19 +17,19 @@ export async function createApiSupabaseClient() {
           const cookie = cookieStore.get(name)
           return cookie?.value
         },
-        set(name: string, value: string, options: any) {
+        set(name: string, value: string, options: Parameters<typeof cookieStore.set>[2]) {
           // En API routes, no podemos setear cookies fácilmente
           // pero necesitamos esta función para que Supabase funcione
           try {
             cookieStore.set(name, value, options)
-          } catch (error) {
+          } catch {
             // Ignorar errores en API routes
           }
         },
-        remove(name: string, options: any) {
+        remove(name: string, options: Parameters<typeof cookieStore.set>[2]) {
           try {
             cookieStore.set(name, '', { ...options, maxAge: 0 })
-          } catch (error) {
+          } catch {
             // Ignorar errores en API routes
           }
         },
@@ -39,7 +40,7 @@ export async function createApiSupabaseClient() {
   return supabase
 }
 
-export async function getAuthenticatedProfile(supabase: any) {
+export async function getAuthenticatedProfile(supabase: SupabaseClient) {
   try {
     // Usar getUser en lugar de getSession (más confiable)
     const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -57,11 +58,12 @@ export async function getAuthenticatedProfile(supabase: any) {
     console.log('✅ User found:', user.email)
     
     // Obtener o crear el perfil
-    let { data: profile, error: profileError } = await supabase
+    const { data, error: profileError } = await supabase
       .from('profiles')
       .select('id, name, email, phone, country, state, address')
       .eq('id', user.id)
       .single()
+    let profile = data
     
     // Si no existe perfil, crearlo
     if (profileError && profileError.code === 'PGRST116') {
@@ -88,6 +90,10 @@ export async function getAuthenticatedProfile(supabase: any) {
       profile = newProfile
     } else if (profileError) {
       console.error('❌ Profile error:', profileError)
+      return null
+    }
+
+    if (!profile) {
       return null
     }
     

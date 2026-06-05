@@ -42,7 +42,14 @@ export async function POST(request: Request) {
   }
 
   const { origin, destination } = validation.data
-  const distanceKm = estimateDistance(origin.address, destination.address)
+  let distanceKm: number
+  try {
+    distanceKm = await estimateDistance(origin.address, destination.address)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'No se pudo calcular la distancia.'
+    return jsonError(message, 502)
+  }
+
   const clientPriceMxn = calcQuote(distanceKm)
 
   return NextResponse.json({

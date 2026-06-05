@@ -20,10 +20,51 @@ export function formatMXN(amount: number): string {
   }).format(amount)
 }
 
-export function estimateDistance(origin: string, destination: string): number {
-  // Mock: genera distancia basada en longitud de strings como seed
-  // En producción: reemplazar con Google Maps Distance Matrix API
+type DistanceMatrixResponse = {
+  status: string
+  error_message?: string
+  rows?: Array<{
+    elements?: Array<{
+      status: string
+      distance?: {
+        value: number
+      }
+    }>
+  }>
+}
+
+export async function estimateDistance(origin: string, destination: string): Promise<number> {
   if (!origin || !destination) return 0
-  const seed = (origin.length * 7 + destination.length * 13) % 200
-  return Math.max(seed + 10, 15)
+
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  if (!apiKey) {
+    throw new Error('Missing GOOGLE_MAPS_API_KEY environment variable.')
+  }
+
+  const params = new URLSearchParams({
+    origins: origin,
+    destinations: destination,
+    key: apiKey,
+    units: 'metric',
+  })
+
+  const response = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?${params}`, {
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Google Distance Matrix request failed with status ${response.status}.`)
+  }
+
+  const data = await response.json() as DistanceMatrixResponse
+  if (data.status !== 'OK') {
+    throw new Error(data.error_message ?? `Google Distance Matrix returned ${data.status}.`)
+  }
+
+  const element = data.rows?.[0]?.elements?.[0]
+  if (!element || element.status !== 'OK' || typeof element.distance?.value !== 'number') {
+    throw new Error(`Google Distance Matrix element returned ${element?.status ?? 'NO_RESULT'}.`)
+  }
+
+  return Math.round((element.distance.value / 1000) * 10) / 10
 }

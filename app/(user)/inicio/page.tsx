@@ -45,11 +45,11 @@ export default function InicioPage() {
 
     const userId = user.id
     let cancelled = false
+    const supabase = createClient()
 
     async function loadData() {
       setLoading(true)
       setError('')
-      const supabase = createClient()
       const { data: trips, error: tripsError } = await supabase
         .from('trips')
         .select('*')
@@ -75,8 +75,21 @@ export default function InicioPage() {
 
     void loadData()
 
+    const channel = supabase
+      .channel(`user-home-trips:${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'trips',
+        filter: `user_id=eq.${userId}`,
+      }, () => {
+        void loadData()
+      })
+      .subscribe()
+
     return () => {
       cancelled = true
+      void supabase.removeChannel(channel)
     }
   }, [user])
 

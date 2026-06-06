@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { validateDocumentContent } from '@/lib/documentValidation'
+import { enforceRateLimit } from '@/lib/rateLimit'
 
 const DOCUMENT_BUCKET = 'documents'
 const SIGNED_URL_TTL_SECONDS = 300
@@ -56,6 +57,13 @@ export async function POST(request: Request) {
   if (!profile) {
     return jsonError('Sesion no autenticada.', 401)
   }
+
+  const rateLimitResponse = await enforceRateLimit(request, profile.id, {
+    prefix: 'document-upload',
+    limit: 6,
+    window: '10 m',
+  })
+  if (rateLimitResponse) return rateLimitResponse
 
   const formData = await request.formData()
   const file = formData.get('file')

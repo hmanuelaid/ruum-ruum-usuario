@@ -43,11 +43,11 @@ export default function ViajesPage() {
 
     const userId = user.id
     let cancelled = false
+    const supabase = createClient()
 
     async function loadTrips() {
       setLoading(true)
       setError('')
-      const supabase = createClient()
       let query = supabase
         .from('trips')
         .select('*')
@@ -74,7 +74,23 @@ export default function ViajesPage() {
     }
 
     void loadTrips()
-    return () => { cancelled = true }
+
+    const channel = supabase
+      .channel(`user-trips:${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'trips',
+        filter: `user_id=eq.${userId}`,
+      }, () => {
+        void loadTrips()
+      })
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      void supabase.removeChannel(channel)
+    }
   }, [user, tab])
 
   return (

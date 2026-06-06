@@ -5,6 +5,7 @@ import {
   firstValidationError,
   validateTripRequestPayload,
 } from '@/lib/validation/tripRequest'
+import { enforceRateLimit } from '@/lib/rateLimit'
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status })
@@ -35,6 +36,13 @@ export async function POST(request: Request) {
   if (authError || !user) {
     return jsonError('Sesion no autenticada.', 401)
   }
+
+  const rateLimitResponse = await enforceRateLimit(request, user.id, {
+    prefix: 'trip-request',
+    limit: 8,
+    window: '10 m',
+  })
+  if (rateLimitResponse) return rateLimitResponse
 
   const payload = await request.json().catch(() => null) as Record<string, unknown> | null
 

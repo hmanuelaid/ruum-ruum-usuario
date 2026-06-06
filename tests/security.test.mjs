@@ -68,3 +68,17 @@ test('trip creation validates payloads and uses the atomic RPC', () => {
   assert.match(migration, /insert into public\.trip_timeline/)
   assert.match(migration, /insert into public\.payments/)
 })
+
+test('sensitive mutation endpoints enforce rate limits', () => {
+  const rateLimit = read('lib/rateLimit.ts')
+  const tripRequestRoute = read('app/api/trips/request/route.ts')
+  const uploadRoute = read('app/api/documents/upload/route.ts')
+
+  assert.match(rateLimit, /@upstash\/ratelimit/)
+  assert.match(rateLimit, /UPSTASH_REDIS_REST_URL/)
+  assert.match(rateLimit, /UPSTASH_REDIS_REST_TOKEN/)
+  assert.match(rateLimit, /x-forwarded-for/)
+  assert.match(rateLimit, /NextResponse\.json\([\s\S]*status:\s*429/)
+  assert.match(tripRequestRoute, /enforceRateLimit\(request,\s*user\.id/)
+  assert.match(uploadRoute, /enforceRateLimit\(request,\s*profile\.id/)
+})

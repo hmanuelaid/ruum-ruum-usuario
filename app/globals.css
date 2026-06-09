@@ -390,6 +390,14 @@ html, body {
   align-items: center; justify-content: center;
   padding: 1.5rem 1rem;
   background: var(--bg); position: relative;
+  overflow-y: auto;
+}
+.onboarding-shell-scroll {
+  justify-content: flex-start;
+  min-height: 100dvh;
+  height: 100dvh;
+  padding-top: 4.5rem;
+  padding-bottom: 2rem;
 }
 .onboarding-card {
   width: 100%; max-width: 400px;
@@ -397,6 +405,9 @@ html, body {
   padding: 2rem 1.5rem;
   background: var(--surface);
   border-radius: 1.25rem; border: 1px solid var(--border);
+}
+.onboarding-documents-card {
+  max-width: 520px;
 }
 .brand-mark {
   width: 52px; height: 52px; border-radius: 14px;

@@ -4,20 +4,33 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/store'
 
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const { setUser } = useAuthStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true); setError('')
+    const normalizedEmail = email.trim().toLowerCase()
+
+    if (!isValidEmail(normalizedEmail)) {
+      setError('Ingresa un correo electrónico válido.')
+      return
+    }
+
+    setLoading(true); setError(''); setMessage('')
     const supabase = createClient()
 
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error: authError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
     if (authError) { setError('Correo o contraseña incorrectos'); setLoading(false); return }
 
     const { data: existingProfile, error: profileLookupError } = await supabase
@@ -42,7 +55,7 @@ export default function LoginPage() {
           auth_id: data.user.id,
           name: data.user.user_metadata?.name ?? data.user.email?.split('@')[0] ?? 'Usuario',
           phone: data.user.user_metadata?.phone ?? '',
-          email: data.user.email ?? email,
+          email: data.user.email ?? normalizedEmail,
           type: 'personal',
           status: 'activo',
         })
@@ -69,6 +82,32 @@ export default function LoginPage() {
     window.location.assign(destination)
   }
 
+  async function handlePasswordReset() {
+    const normalizedEmail = email.trim().toLowerCase()
+
+    if (!isValidEmail(normalizedEmail)) {
+      setError('Escribe tu correo electrónico para enviarte el enlace de recuperación.')
+      return
+    }
+
+    setResetLoading(true)
+    setError('')
+    setMessage('')
+
+    const supabase = createClient()
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+
+    if (resetError) {
+      setError(resetError.message)
+    } else {
+      setMessage('Te enviamos un enlace para restablecer tu contraseña.')
+    }
+
+    setResetLoading(false)
+  }
+
   return (
     <div className="onboarding-shell">
       <div className="onboarding-card">
@@ -83,10 +122,14 @@ export default function LoginPage() {
           <input type="password" className="field-input" placeholder="••••••••"
             value={password} onChange={e => setPassword(e.target.value)} required />
           {error && <p className="field-error">{error}</p>}
+          {message && <p className="field-hint">{message}</p>}
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
+        <button className="btn-ghost" type="button" onClick={handlePasswordReset} disabled={resetLoading}>
+          {resetLoading ? 'Enviando enlace…' : '¿Olvidaste tu contraseña?'}
+        </button>
         <button className="btn-ghost" onClick={() => router.push('/onboarding')}>
           ¿Usuario nuevo? Regístrate
         </button>

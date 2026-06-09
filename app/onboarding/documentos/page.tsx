@@ -89,10 +89,10 @@ export default function DocumentosPage() {
   }
 
   return (
-    <div className="onboarding-shell">
+    <div className="onboarding-shell onboarding-shell-scroll">
       <button className="btn-back" onClick={() => router.back()}>← Atrás</button>
 
-      <div className="onboarding-card" style={{ gap: '1.25rem' }}>
+      <div className="onboarding-card onboarding-documents-card" style={{ gap: '1.25rem' }}>
         <div className="step-badge">Paso 2 de 2</div>
 
         <div>

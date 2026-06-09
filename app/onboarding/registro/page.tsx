@@ -5,14 +5,23 @@ import { createClient } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/store'
 
 function normalizePhone(phone: string) {
-  return phone.trim().replace(/[\s()-]/g, '')
+  return phone.trim().replace(/\D/g, '')
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+function joinName(firstName: string, lastName: string) {
+  return `${firstName.trim()} ${lastName.trim()}`.replace(/\s+/g, ' ').trim()
 }
 
 export default function RegistroPage() {
   const router = useRouter()
   const { setUser } = useAuthStore()
   const [form, setForm] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     phone: '',
     email: '',
     password: '',
@@ -29,10 +38,20 @@ export default function RegistroPage() {
     e.preventDefault()
     const phone = normalizePhone(form.phone)
     const email = form.email.trim().toLowerCase()
-    const name = form.name.trim()
+    const name = joinName(form.firstName, form.lastName)
 
-    if (!/^\+\d{8,15}$/.test(phone)) {
-      setError('Ingresa el teléfono en formato internacional, por ejemplo +525500000000.')
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      setError('Ingresa tu nombre y apellidos.')
+      return
+    }
+
+    if (!isValidEmail(email)) {
+      setError('Ingresa un correo electrónico válido.')
+      return
+    }
+
+    if (!/^\d{10}$/.test(phone)) {
+      setError('Ingresa un teléfono nacional de 10 dígitos, sin código internacional.')
       return
     }
 
@@ -147,13 +166,17 @@ export default function RegistroPage() {
         <p className="onboarding-sub">Registra tus datos para gestionar tus traslados.</p>
 
         <form onSubmit={handleSubmit} className="auth-form">
-          <label className="field-label">Nombre completo</label>
-          <input className="field-input" placeholder="Juan García"
-            value={form.name} onChange={e => update('name', e.target.value)} required />
+          <label className="field-label">Nombre(s)</label>
+          <input className="field-input" placeholder="Juan Carlos"
+            value={form.firstName} onChange={e => update('firstName', e.target.value)} required />
+
+          <label className="field-label">Apellido(s)</label>
+          <input className="field-input" placeholder="García López"
+            value={form.lastName} onChange={e => update('lastName', e.target.value)} required />
 
           <label className="field-label">Teléfono</label>
-          <input className="field-input" type="tel" placeholder="+52 55 0000 0000"
-            value={form.phone} onChange={e => update('phone', e.target.value)} required />
+          <input className="field-input" type="tel" inputMode="numeric" placeholder="55 0000 0000"
+            value={form.phone} onChange={e => update('phone', e.target.value.replace(/[^\d\s-]/g, ''))} required />
 
           <label className="field-label">Correo electrónico</label>
           <input className="field-input" type="email" placeholder="correo@ejemplo.com"

@@ -129,10 +129,6 @@ export async function POST(request: Request) {
     storage_path: path,
     mime_type: validation.mimeType,
     file_size: file.size,
-    scan_status: 'pending',
-    content_validated_at: now,
-    uploaded_at: now,
-    updated_at: now,
   }
 
   const query = existing

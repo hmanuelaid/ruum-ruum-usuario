@@ -110,7 +110,6 @@ export default function RegistroPage() {
       name,
       email,
       phone,
-      status: 'activo',
     }
 
     const { data: existingProfile, error: existingError } = await supabase

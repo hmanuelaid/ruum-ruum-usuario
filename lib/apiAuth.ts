@@ -42,54 +42,47 @@ export async function createApiSupabaseClient() {
 
 export async function getAuthenticatedProfile(supabase: SupabaseClient) {
   try {
-    // Usar getUser en lugar de getSession (más confiable)
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     
     if (userError) {
-      console.error('❌ getUser error:', userError.message)
+      console.error('getUser error:', userError.message)
       return null
     }
     
     if (!user) {
-      console.log('❌ No user found')
       return null
     }
     
-    console.log('✅ User found:', user.email)
-    
-    // Obtener o crear el perfil
     const { data, error: profileError } = await supabase
-      .from('profiles')
+      .from('app_users')
       .select('id, name, email, phone, country, state, address')
-      .eq('id', user.id)
-      .single()
+      .eq('auth_id', user.id)
+      .maybeSingle()
     let profile = data
     
-    // Si no existe perfil, crearlo
-    if (profileError && profileError.code === 'PGRST116') {
-      console.log('📝 Creating profile for user:', user.id)
+    if (!profile && (!profileError || profileError.code === 'PGRST116')) {
       const { data: newProfile, error: createError } = await supabase
-        .from('profiles')
+        .from('app_users')
         .insert({
-          id: user.id,
-          name: user.user_metadata?.name || user.email?.split('@')[0] || '',
-          email: user.email,
-          phone: null,
+          auth_id: user.id,
+          name: user.user_metadata?.name ?? user.email?.split('@')[0] ?? 'Usuario',
+          email: user.email ?? '',
+          phone: user.user_metadata?.phone ?? '',
           country: null,
           state: null,
-          address: null
+          address: null,
         })
-        .select()
+        .select('id, name, email, phone, country, state, address')
         .single()
       
       if (createError) {
-        console.error('❌ Error creating profile:', createError)
+        console.error('Error creating app user profile:', createError)
         return null
       }
       
       profile = newProfile
     } else if (profileError) {
-      console.error('❌ Profile error:', profileError)
+      console.error('App user profile error:', profileError)
       return null
     }
 
@@ -110,7 +103,7 @@ export async function getAuthenticatedProfile(supabase: SupabaseClient) {
       }
     }
   } catch (error) {
-    console.error('❌ Error in getAuthenticatedProfile:', error)
+    console.error('Error in getAuthenticatedProfile:', error)
     return null
   }
 }

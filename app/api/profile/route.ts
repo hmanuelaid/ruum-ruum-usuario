@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createApiSupabaseClient, jsonError } from '@/lib/apiAuth'
+import { createApiSupabaseClient, getAuthenticatedProfile, jsonError } from '@/lib/apiAuth'
 
 const PROFILE_FIELDS = ['name', 'phone', 'country', 'state', 'address'] as const
 type ProfileField = (typeof PROFILE_FIELDS)[number]
@@ -20,9 +20,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function sanitizeText(value: unknown, maxLength: number) {
   if (value === undefined) return undefined
+  if (value === null) return null
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
-  if (trimmed.length === 0) return null
   if (trimmed.length > maxLength) return null
   return trimmed
 }
@@ -32,7 +32,7 @@ function validatePhone(phone: string): boolean {
   return phoneRegex.test(phone)
 }
 
-function validateProfilePatch(body: unknown): { error: string } | { payload: Partial<Record<ProfileField, string>> } {
+function validateProfilePatch(body: unknown): { error: string } | { payload: Partial<Record<ProfileField, string | null>> } {
   if (!isRecord(body)) {
     return { error: 'Payload inválido.' }
   }
@@ -41,7 +41,7 @@ function validateProfilePatch(body: unknown): { error: string } | { payload: Par
     return { error: 'No se puede actualizar el email desde este endpoint.' }
   }
 
-  const payload: Partial<Record<ProfileField, string>> = {}
+  const payload: Partial<Record<ProfileField, string | null>> = {}
 
   for (const key of Object.keys(body)) {
     if (!PROFILE_FIELDS.includes(key as ProfileField)) {
@@ -52,12 +52,12 @@ function validateProfilePatch(body: unknown): { error: string } | { payload: Par
   for (const field of PROFILE_FIELDS) {
     const value = sanitizeText(body[field], field === 'address' ? 500 : 100)
     
-    if (value === null) {
+    if (value === null && body[field] !== null) {
       return { error: `Valor inválido para ${field}. Máximo ${field === 'address' ? 500 : 100} caracteres.` }
     }
     
     if (value !== undefined) {
-      if (field === 'phone' && value !== '') {
+      if (field === 'phone' && value !== null && value !== '') {
         if (!validatePhone(value)) {
           return { error: 'Formato de teléfono inválido. Usa formato internacional (+525500000000).' }
         }
@@ -76,52 +76,13 @@ function validateProfilePatch(body: unknown): { error: string } | { payload: Par
 export async function GET() {
   try {
     const supabase = await createApiSupabaseClient()
-    
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
-    if (userError || !user) {
+    const auth = await getAuthenticatedProfile(supabase)
+
+    if (!auth) {
       return jsonError('Sesión no autenticada.', 401)
     }
-    
-    // Obtener el perfil
-    const { data, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, name, email, phone, country, state, address')
-      .eq('id', user.id)
-      .single()
-    let profile = data
-    
-    // Si no existe perfil, crearlo
-    if (profileError && profileError.code === 'PGRST116') {
-      const { data: newProfile, error: createError } = await supabase
-        .from('profiles')
-        .insert({
-          id: user.id,
-          name: user.user_metadata?.name || user.email?.split('@')[0] || '',
-          email: user.email,
-          phone: null,
-          country: null,
-          state: null,
-          address: null
-        })
-        .select('id, name, email, phone, country, state, address')
-        .single()
-      
-      if (createError || !newProfile) {
-        console.error('Error creating profile:', createError)
-        return jsonError('Error al crear perfil', 500)
-      }
-      
-      profile = newProfile
-    } else if (profileError) {
-      console.error('Profile error:', profileError)
-      return jsonError('Error al obtener perfil', 500)
-    }
-    
-    // ✅ Verificar que profile no es null
-    if (!profile) {
-      return jsonError('Perfil no encontrado', 404)
-    }
+
+    const profile = auth.profile
     
     const response: ProfileResponse = {
       id: profile.id,
@@ -144,10 +105,9 @@ export async function GET() {
 export async function PATCH(req: Request) {
   try {
     const supabase = await createApiSupabaseClient()
-    
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
-    if (userError || !user) {
+    const auth = await getAuthenticatedProfile(supabase)
+
+    if (!auth) {
       return jsonError('Sesión no autenticada.', 401)
     }
     
@@ -162,34 +122,13 @@ export async function PATCH(req: Request) {
       return jsonError(validation.error, 400)
     }
     
-    // Actualizar perfil
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({
-        name: validation.payload.name,
-        phone: validation.payload.phone,
-        country: validation.payload.country,
-        state: validation.payload.state,
-        address: validation.payload.address,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', user.id)
-    
-    if (updateError) {
+    const { data: updatedProfile, error: updateError } = await supabase.rpc('update_user_profile', {
+      profile_payload: validation.payload,
+    })
+
+    if (updateError || !updatedProfile) {
       console.error('Update error:', updateError)
-      return jsonError(updateError.message, 400)
-    }
-    
-    // Obtener perfil actualizado
-    const { data: updatedProfile, error: fetchError } = await supabase
-      .from('profiles')
-      .select('id, name, email, phone, country, state, address')
-      .eq('id', user.id)
-      .single()
-    
-    if (fetchError || !updatedProfile) {
-      console.error('Fetch error:', fetchError)
-      return jsonError('Error al obtener perfil actualizado', 500)
+      return jsonError(updateError?.message ?? 'Error al actualizar perfil', 400)
     }
     
     const response: ProfileResponse = {

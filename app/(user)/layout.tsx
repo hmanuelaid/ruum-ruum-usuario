@@ -49,7 +49,6 @@ async function getAuthenticatedProfile(): Promise<User> {
         name: authUser.user_metadata?.name ?? authUser.email?.split('@')[0] ?? 'Usuario',
         phone: authUser.user_metadata?.phone ?? '',
         email: authUser.email ?? '',
-        status: 'activo',
       })
       .select('id, name, phone, email')
       .single()

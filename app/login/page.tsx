@@ -56,7 +56,6 @@ export default function LoginPage() {
           name: data.user.user_metadata?.name ?? data.user.email?.split('@')[0] ?? 'Usuario',
           phone: data.user.user_metadata?.phone ?? '',
           email: data.user.email ?? normalizedEmail,
-          status: 'activo',
         })
         .select('id, name, phone, email')
         .single()

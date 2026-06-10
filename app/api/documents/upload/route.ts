@@ -12,6 +12,7 @@ type AppUserProfile = {
   id: string
   name: string
   email: string | null
+  authId?: string
 }
 
 function jsonError(message: string, status = 400) {
@@ -47,7 +48,10 @@ async function getAuthenticatedProfile(supabase: Awaited<ReturnType<typeof creat
     .eq('auth_id', user.id)
     .maybeSingle<AppUserProfile>()
 
-  return profile
+  if (!profile) return null
+
+  // Devolver también el auth_id para construir el path de Storage
+  return { ...profile, authId: user.id }
 }
 
 export async function POST(request: Request) {
@@ -88,7 +92,9 @@ export async function POST(request: Request) {
   }
 
   const now = new Date().toISOString()
-  const path = `user/${profile.id}/${docType}/${crypto.randomUUID()}.${validation.extension}`
+  // El path usa authId para que la política de storage.objects pueda verificar
+  // auth.uid()::text = folder[2] sin ningún sub-select a app_users
+  const path = `user/${profile.authId}/${docType}/${crypto.randomUUID()}.${validation.extension}`
 
   const { data: existing, error: existingError } = await supabase
     .from('documents')
@@ -116,13 +122,17 @@ export async function POST(request: Request) {
   const documentPayload = {
     owner_id: profile.id,
     owner_type: 'user',
+    owner_name: profile.name,
     type: docType,
     status: 'en_revision',
+    url: null,
     storage_path: path,
     mime_type: validation.mimeType,
     file_size: file.size,
     scan_status: 'pending',
     content_validated_at: now,
+    uploaded_at: now,
+    updated_at: now,
   }
 
   const query = existing

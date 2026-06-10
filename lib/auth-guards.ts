@@ -12,7 +12,7 @@ const USER_TYPES = new Set([
 ])
 
 type UserRow = {
-  type?: string | null
+  id?: string | null
 }
 
 function normalizeType(value: unknown) {
@@ -31,29 +31,29 @@ function hasTrustedUserType(user: User) {
   })
 }
 
-async function getAppUserTypeByField(
+async function getAppUserProfileIdByField(
   supabase: SupabaseClient,
-  field: 'id' | 'email',
+  field: 'auth_id' | 'email',
   value: string
 ) {
   const { data, error } = await supabase
     .from('app_users')
-    .select('type')
+    .select('id')
     .eq(field, value)
     .maybeSingle()
 
   if (error) return null
-  return normalizeType((data as UserRow | null)?.type)
+  return (data as UserRow | null)?.id ?? null
 }
 
 export async function hasUserAccess(supabase: SupabaseClient, user: User) {
   if (hasTrustedUserType(user)) return true
 
-  const typeById = await getAppUserTypeByField(supabase, 'id', user.id)
-  if (typeById && USER_TYPES.has(typeById)) return true
+  const profileByAuthId = await getAppUserProfileIdByField(supabase, 'auth_id', user.id)
+  if (profileByAuthId) return true
 
   if (!user.email) return false
 
-  const typeByEmail = await getAppUserTypeByField(supabase, 'email', user.email)
-  return Boolean(typeByEmail && USER_TYPES.has(typeByEmail))
+  const profileByEmail = await getAppUserProfileIdByField(supabase, 'email', user.email)
+  return Boolean(profileByEmail)
 }

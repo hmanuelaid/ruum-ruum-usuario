@@ -110,7 +110,6 @@ export default function RegistroPage() {
       name,
       email,
       phone,
-      type: 'personal',
       status: 'activo',
     }
 

@@ -120,15 +120,20 @@ export async function POST(request: Request) {
   }
 
   const documentPayload = {
-    owner_id: profile.id,
-    owner_type: 'user',
-    owner_name: profile.name,
-    type: docType,
-    status: 'en_revision',
-    url: null,
-    storage_path: path,
-    mime_type: validation.mimeType,
-    file_size: file.size,
+    owner_id:             profile.id,
+    owner_type:           'user',
+    owner_name:           profile.name,
+    type:                 docType,
+    status:               'en_revision',  // agregado por migración 20260603004000
+    url:                  null,
+    storage_path:         path,
+    mime_type:            validation.mimeType,
+    file_size:            file.size,      // bigint
+    file_size_bytes:      file.size,      // integer (columna legacy)
+    scan_status:          'pending',
+    content_validated_at: now,
+    uploaded_at:          now,
+    updated_at:           now,
   }
 
   const query = existing
@@ -136,12 +141,12 @@ export async function POST(request: Request) {
       .from('documents')
       .update(documentPayload)
       .eq('id', existing.id)
-      .select('id, status, storage_path, mime_type, file_size, scan_status')
+      .select('id, status, storage_path, mime_type, file_size, file_size_bytes, scan_status')
       .single()
     : supabase
       .from('documents')
       .insert(documentPayload)
-      .select('id, status, storage_path, mime_type, file_size, scan_status')
+      .select('id, status, storage_path, mime_type, file_size, file_size_bytes, scan_status')
       .single()
 
   const { data: document, error: documentError } = await query

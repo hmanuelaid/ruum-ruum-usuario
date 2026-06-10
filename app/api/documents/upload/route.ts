@@ -116,17 +116,13 @@ export async function POST(request: Request) {
   const documentPayload = {
     owner_id: profile.id,
     owner_type: 'user',
-    owner_name: profile.name,
     type: docType,
     status: 'en_revision',
-    url: null,
     storage_path: path,
     mime_type: validation.mimeType,
     file_size: file.size,
     scan_status: 'pending',
     content_validated_at: now,
-    uploaded_at: now,
-    updated_at: now,
   }
 
   const query = existing

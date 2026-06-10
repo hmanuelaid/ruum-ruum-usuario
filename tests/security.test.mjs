@@ -50,6 +50,7 @@ test('document uploads stay private and require server validation', () => {
   assert.match(signedUrlRoute, /createSignedUrl/)
   assert.match(storage, /\/api\/documents\/upload/)
   assert.doesNotMatch(uploadRoute, /getPublicUrl/)
+  assert.doesNotMatch(uploadRoute, /url:\s*null/)
 })
 
 test('trip creation validates payloads and uses the atomic RPC', () => {

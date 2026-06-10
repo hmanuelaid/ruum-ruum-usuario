@@ -9,8 +9,11 @@ type DocumentRecord = {
   type?: string
   status?: DocStatus
   storage_path?: string | null
+  storagePath?: string | null
   mime_type?: string | null
+  mimeType?: string | null
   notes?: string | null
+  signedUrl?: string
 }
 
 async function getSignedDocumentUrl(documentId: string) {
@@ -48,25 +51,30 @@ export function useDocuments(ownerId: string | null, docTypes: { docType: string
       setLoading(true)
       setError('')
 
-      const { data, error: documentsError } = await supabase
-        .from('documents')
-        .select('id, type, status, storage_path, mime_type, notes')
-        .eq('owner_id', ownerId)
+      const response = await fetch('/api/documents', {
+        headers: { Accept: 'application/json' },
+      })
 
-      if (documentsError) {
+      const payload = await response.json().catch(() => null) as {
+        ok?: boolean
+        data?: DocumentRecord[]
+        error?: string
+      } | null
+
+      if (!response.ok || !payload?.ok) {
         if (!cancelled) {
           setDocs([])
-          setError(`No pudimos cargar tus documentos: ${documentsError.message}`)
+          setError(payload?.error ?? 'No pudimos cargar tus documentos.')
           setLoading(false)
         }
         return
       }
 
       const merged = await Promise.all(docTypes.map(async dt => {
-        const found = data?.find(d => d.type === dt.docType) as DocumentRecord | undefined
-        const previewUrl = found?.id && found.storage_path
-          ? await getSignedDocumentUrl(found.id)
-          : undefined
+        const found = payload.data?.find(d => d.type === dt.docType)
+        const storagePath = found?.storagePath ?? found?.storage_path ?? undefined
+        const previewUrl = found?.signedUrl ??
+          (found?.id && storagePath ? await getSignedDocumentUrl(found.id) : undefined)
 
         return {
           id: found?.id,
@@ -75,8 +83,8 @@ export function useDocuments(ownerId: string | null, docTypes: { docType: string
           required: dt.required,
           status: (found?.status ?? 'pendiente_carga') as DocStatus,
           previewUrl,
-          storagePath: found?.storage_path ?? undefined,
-          mimeType: found?.mime_type ?? undefined,
+          storagePath,
+          mimeType: found?.mimeType ?? found?.mime_type ?? undefined,
           notes: found?.notes ?? undefined,
         }
       }))

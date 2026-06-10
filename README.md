@@ -25,11 +25,20 @@ Crea `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key
 NEXT_PUBLIC_ENABLE_DEMO_DATA=false
+
+# Requerida para estimar distancias (solo server-side, no expuesta al navegador)
+GOOGLE_MAPS_API_KEY=tu-api-key
+
+# Opcionales: rate limiting distribuido con Upstash Redis
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
 ```
 
 Notas:
 
-- No se requieren variables de Cloudinary. La dependencia fue retirada porque no hay uso en codigo fuente.
+- No se requieren variables de Cloudinary ni Twilio. Ambas dependencias fueron retiradas por falta de uso.
+- `GOOGLE_MAPS_API_KEY` es server-side unicamente. Sin ella la estimacion de distancia falla en runtime; activar la API "Distance Matrix" en Google Cloud Console.
+- Sin `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`, el rate limiting cae a memoria local (valido en desarrollo, no distribuido en produccion).
 - `NEXT_PUBLIC_ENABLE_DEMO_DATA=true` solo debe usarse para entornos demo controlados.
 - No guardes service-role keys en variables expuestas al navegador.
 

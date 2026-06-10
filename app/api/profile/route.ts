@@ -148,3 +148,55 @@ export async function PATCH(req: Request) {
     return jsonError('Error interno del servidor', 500)
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const supabase = await createApiSupabaseClient()
+
+    // getAuthenticatedProfile crea el perfil si no existe,
+    // usando name/phone de user_metadata (que se pasaron en el signUp)
+    const auth = await getAuthenticatedProfile(supabase)
+
+    if (!auth) {
+      return jsonError('Sesión no autenticada.', 401)
+    }
+
+    // Aplicar name y phone del body si se enviaron (complementan user_metadata)
+    const body = await req.json().catch(() => null) as {
+      name?: string
+      phone?: string
+      email?: string
+    } | null
+
+    const patchFields: Record<string, string> = {}
+    if (body?.name && typeof body.name === 'string') {
+      patchFields.name = body.name.trim().replace(/\s+/g, ' ').slice(0, 100)
+    }
+    if (body?.phone && typeof body.phone === 'string') {
+      const digits = body.phone.replace(/\D/g, '')
+      if (/^\d{10}$/.test(digits)) patchFields.phone = digits
+    }
+
+    if (Object.keys(patchFields).length > 0) {
+      await supabase
+        .from('app_users')
+        .update(patchFields)
+        .eq('id', auth.profile.id)
+    }
+
+    const profile = { ...auth.profile, ...patchFields }
+
+    return NextResponse.json({
+      ok: true,
+      data: {
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        phone: profile.phone ?? '',
+      },
+    })
+  } catch (error) {
+    console.error('Unexpected error:', error)
+    return jsonError('Error interno del servidor', 500)
+  }
+}

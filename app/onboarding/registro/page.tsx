@@ -88,62 +88,33 @@ export default function RegistroPage() {
       return
     }
 
-    let authUser = signUpData.user
-
+    // Si Supabase no generó sesión (confirmación de email activa), redirigir a login
     if (!signUpData.session) {
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password: form.password,
-      })
-
-      if (signInError || !signInData.user) {
-        setError('Cuenta creada. Confirma tu correo e inicia sesión para continuar.')
-        setLoading(false)
-        return
-      }
-
-      authUser = signInData.user
-    }
-
-    const profilePayload = {
-      auth_id: authUser.id,
-      name,
-      email,
-      phone,
-    }
-
-    const { data: existingProfile, error: existingError } = await supabase
-      .from('app_users')
-      .select('id')
-      .eq('auth_id', authUser.id)
-      .maybeSingle()
-
-    if (existingError) {
-      setError(`No pudimos consultar tu perfil: ${existingError.message}`)
+      setError('Cuenta creada. Confirma tu correo e inicia sesión para continuar.')
       setLoading(false)
       return
     }
 
-    const profileRequest = existingProfile
-      ? supabase
-          .from('app_users')
-          .update(profilePayload)
-          .eq('id', existingProfile.id)
-          .select('id, name, phone, email')
-          .single()
-      : supabase
-          .from('app_users')
-          .insert(profilePayload)
-          .select('id, name, phone, email')
-          .single()
+    // Crear perfil via API route autenticado (evita escritura directa desde el cliente)
+    const profileRes = await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, phone }),
+    })
 
-    const { data: profile, error: profileError } = await profileRequest
+    const profilePayload = await profileRes.json().catch(() => null) as {
+      ok?: boolean
+      data?: { id: string; name: string; phone: string | null; email: string }
+      error?: string
+    } | null
 
-    if (profileError || !profile) {
-      setError(profileError?.message ?? 'No pudimos crear tu perfil.')
+    if (!profileRes.ok || !profilePayload?.ok || !profilePayload.data) {
+      setError(profilePayload?.error ?? 'No pudimos crear tu perfil.')
       setLoading(false)
       return
     }
+
+    const profile = profilePayload.data
 
     setUser({
       id: profile.id,
@@ -152,7 +123,8 @@ export default function RegistroPage() {
       email: profile.email,
     })
 
-    window.location.assign('/onboarding/documentos')
+    // router.push preserva el store de Zustand; window.location.assign lo destruye
+    router.push('/onboarding/documentos')
   }
 
   return (

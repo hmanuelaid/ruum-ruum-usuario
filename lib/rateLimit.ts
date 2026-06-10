@@ -16,6 +16,17 @@ type MemoryEntry = {
 const memoryStore = new Map<string, MemoryEntry>()
 const limiters = new Map<string, Ratelimit>()
 
+// Limpia entradas expiradas cada 60 s para evitar acumulacion indefinida
+// en entornos sin Redis (fallback en memoria).
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now()
+    memoryStore.forEach((entry, key) => {
+      if (entry.resetAt <= now) memoryStore.delete(key)
+    })
+  }, 60_000)
+}
+
 function getClientIp(request: Request) {
   const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
   return (

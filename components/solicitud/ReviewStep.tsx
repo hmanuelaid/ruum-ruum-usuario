@@ -35,6 +35,7 @@ export default function ReviewStep() {
   const [loading, setLoading] = useState(false)
   const [quote, setQuote] = useState<Quote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
   const hasRoute = Boolean(draft.origin.address && draft.destination.address)
 
   useEffect(() => {
@@ -59,21 +60,36 @@ export default function ReviewStep() {
 
     async function loadQuote() {
       setQuoteLoading(true)
+      setQuoteError(null)
 
-      const response = await fetch('/api/trips/quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(quotePayload),
-      })
+      try {
+        const response = await fetch('/api/trips/quote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(quotePayload),
+        })
 
-      const payload = await response.json().catch(() => null) as {
-        ok?: boolean
-        data?: Quote
-      } | null
+        const payload = await response.json().catch(() => null) as {
+          ok?: boolean
+          data?: Quote
+          error?: string
+        } | null
 
-      if (!cancelled) {
-        setQuote(payload?.ok && payload.data ? payload.data : null)
-        setQuoteLoading(false)
+        if (!cancelled) {
+          if (!response.ok || !payload?.ok) {
+            setQuote(null)
+            setQuoteError(payload?.error ?? 'No fue posible calcular la distancia. Puedes continuar con la solicitud.')
+          } else {
+            setQuote(payload.data ?? null)
+          }
+          setQuoteLoading(false)
+        }
+      } catch {
+        if (!cancelled) {
+          setQuote(null)
+          setQuoteError('No fue posible calcular la distancia. Puedes continuar con la solicitud.')
+          setQuoteLoading(false)
+        }
       }
     }
 
@@ -172,8 +188,14 @@ export default function ReviewStep() {
             </p>
           </div>
         </div>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          📍 {hasRoute && quote ? `~${quote.distanceKm} km estimados` : quoteLoading ? 'Calculando distancia…' : 'Distancia por calcular'}
+        <p style={{ fontSize: 13, color: quoteError ? 'var(--danger, #c0392b)' : 'var(--text-muted)' }}>
+          📍 {quoteError
+            ? quoteError
+            : hasRoute && quote
+              ? `~${quote.distanceKm} km estimados`
+              : quoteLoading
+                ? 'Calculando distancia…'
+                : 'Distancia por calcular'}
         </p>
       </div>
 

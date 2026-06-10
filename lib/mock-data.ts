@@ -1,6 +1,16 @@
 // ─── lib/mock-data.ts ─────────────────────────────────────────────────────────
 import type { Trip, Vehicle, User } from './types'
 
+if (
+  process.env.NODE_ENV === 'production' &&
+  process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === 'true'
+) {
+  throw new Error(
+    '[ruum] NEXT_PUBLIC_ENABLE_DEMO_DATA=true no puede estar activo en producción. ' +
+    'Revisa las variables de entorno del ambiente de despliegue.'
+  )
+}
+
 export const DEMO_DATA_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === 'true'
 
 const demoUser: User = {

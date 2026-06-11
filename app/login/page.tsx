@@ -1,4 +1,4 @@
-      'use client'
+'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -235,7 +235,8 @@ export default function LoginPage() {
               className="field-input"
               placeholder="••••••••"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value.toUpperCase())}
+              autoComplete="current-password"
               required
               style={{ paddingRight: '2.8rem' }}
             />

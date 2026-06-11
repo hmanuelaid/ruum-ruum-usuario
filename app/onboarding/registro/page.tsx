@@ -53,15 +53,38 @@ async function waitForSessionCookie(maxMs = 3000): Promise<void> {
   }
 }
 
+// Icono ojo abierto
+function EyeOpen() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  )
+}
+
+// Icono ojo cerrado
+function EyeOff() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  )
+}
+
 // ─── componente ───────────────────────────────────────────────────────────────
 export default function RegistroPage() {
   const router = useRouter()
   const { setUser, completeOnboarding } = useAuthStore()
   const { showToast } = useAppStore()
 
-  const [step, setStep]       = useState<1 | 2>(1)
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
+  const [step, setStep]         = useState<1 | 2>(1)
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
+  const [showPwd, setShowPwd]   = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', email: '', password: '', confirmPassword: '' })
   const [docs, setDocs]       = useState<DocState[]>(initialDocs)
 
@@ -201,11 +224,17 @@ export default function RegistroPage() {
             <form onSubmit={handleCreateAccount} className="auth-form">
               <label className="field-label">Nombre(s)</label>
               <input className="field-input" placeholder="Juan Carlos"
-                value={form.firstName} onChange={e => update('firstName', e.target.value)} required />
+                value={form.firstName}
+                onChange={e => update('firstName', e.target.value)}
+                autoCapitalize="words"
+                required />
 
               <label className="field-label">Apellido(s)</label>
               <input className="field-input" placeholder="García López"
-                value={form.lastName} onChange={e => update('lastName', e.target.value)} required />
+                value={form.lastName}
+                onChange={e => update('lastName', e.target.value)}
+                autoCapitalize="words"
+                required />
 
               <label className="field-label">Teléfono</label>
               <input className="field-input" type="tel" inputMode="numeric" placeholder="55 0000 0000"
@@ -216,12 +245,49 @@ export default function RegistroPage() {
                 value={form.email} onChange={e => update('email', e.target.value)} required />
 
               <label className="field-label">Contraseña</label>
-              <input className="field-input" type="password" placeholder="Mínimo 8 caracteres"
-                value={form.password} onChange={e => update('password', e.target.value)} minLength={8} required />
-
+              <div style={{ position: 'relative' }}>
+                <input
+                  className="field-input"
+                  type={showPwd ? 'text' : 'password'}
+                  placeholder="Mínimo 8 caracteres"
+                  value={form.password}
+                  onChange={e => update('password', e.target.value.toUpperCase())}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  style={{ paddingRight: '2.8rem' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd(v => !v)}
+                  aria-label={showPwd ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: 0 }}
+                >
+                  {showPwd ? <EyeOff /> : <EyeOpen />}
+                </button>
+              </div>
               <label className="field-label">Confirmar contraseña</label>
-              <input className="field-input" type="password" placeholder="Repite tu contraseña"
-                value={form.confirmPassword} onChange={e => update('confirmPassword', e.target.value)} minLength={8} required />
+              <div style={{ position: 'relative' }}>
+                <input
+                  className="field-input"
+                  type={showConfirm ? 'text' : 'password'}
+                  placeholder="Repite tu contraseña"
+                  value={form.confirmPassword}
+                  onChange={e => update('confirmPassword', e.target.value.toUpperCase())}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  style={{ paddingRight: '2.8rem' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm(v => !v)}
+                  aria-label={showConfirm ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: 0 }}
+                >
+                  {showConfirm ? <EyeOff /> : <EyeOpen />}
+                </button>
+              </div>
 
               {error && <p className="field-error">{error}</p>}
 

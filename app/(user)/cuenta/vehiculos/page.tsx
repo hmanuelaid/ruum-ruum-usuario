@@ -77,7 +77,7 @@ const VEHICLE_TYPES: { value: VehicleType; label: string }[] = [
 ]
 
 const TRANSMISSIONS: { value: TransmissionType; label: string }[] = [
-  { value: 'automatica', label: 'Automatica' },
+  { value: 'automatica', label: 'Automática' },
   { value: 'manual', label: 'Manual' },
 ]
 
@@ -97,14 +97,14 @@ function vehicleTitle(vehicle: VehicleDisplay) {
     .join(' ')
     .trim()
 
-  return name || 'Vehiculo'
+  return name || 'Vehículo'
 }
 
 function vehicleSubtitle(vehicle: VehicleDisplay) {
   return [
     vehicle.plates,
     vehicle.color,
-    vehicle.transmission === 'automatica' ? 'Automatico' : vehicle.transmission === 'manual' ? 'Manual' : '',
+    vehicle.transmission === 'automatica' ? 'Automático' : vehicle.transmission === 'manual' ? 'Manual' : '',
   ]
     .filter(Boolean)
     .join(' · ')
@@ -147,12 +147,11 @@ export default function VehiculosPage() {
   )
 
   const loadVehicles = useCallback(async () => {
-    await Promise.resolve()
     setLoading(true)
     setError('')
 
     try {
-      const response = await fetch('/api/vehicles', {
+      const response = await fetch('/api/vehicles?_=${Date.now()}', {
         headers: { Accept: 'application/json' },
       })
 
@@ -166,14 +165,15 @@ export default function VehiculosPage() {
       if (!response.ok || !payload?.ok) {
         throw new Error(
           payload && !payload.ok
-            ? payload.error ?? 'No pudimos cargar tus vehiculos.'
-            : 'No pudimos cargar tus vehiculos.',
+            ? payload.error ?? 'No pudimos cargar tus vehículos.'
+            : 'No pudimos cargar tus vehículos.',
         )
       }
 
-      setVehicles(payload.data)
+      setVehicles(payload.data || [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No pudimos cargar tus vehiculos.')
+      console.error('Error loading vehicles:', err)
+      setError(err instanceof Error ? err.message : 'No pudimos cargar tus vehículos.')
       setVehicles([])
     } finally {
       setLoading(false)
@@ -181,11 +181,7 @@ export default function VehiculosPage() {
   }, [router])
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void loadVehicles()
-    }, 0)
-
-    return () => window.clearTimeout(timeout)
+    loadVehicles()
   }, [loadVehicles])
 
   function clearFieldError(field: string) {
@@ -258,25 +254,30 @@ export default function VehiculosPage() {
       if (!response.ok || !payload?.ok) {
         throw new Error(
           payload && !payload.ok
-            ? payload.error ?? 'No pudimos guardar el vehiculo.'
-            : 'No pudimos guardar el vehiculo.',
+            ? payload.error ?? 'No pudimos guardar el vehículo.'
+            : 'No pudimos guardar el vehículo.',
         )
       }
 
-      setVehicles((current) => {
-        if (editing) {
-          return current.map((vehicle) => (
+      // Actualizar el estado local inmediatamente
+      if (editing && payload.data) {
+        setVehicles((current) =>
+          current.map((vehicle) =>
             vehicle.id === payload.data.id ? payload.data : vehicle
-          ))
-        }
+          )
+        )
+      } else if (payload.data) {
+        setVehicles((current) => [payload.data, ...current])
+      }
 
-        return [payload.data, ...current]
-      })
+      // Recargar para asegurar consistencia
+      await loadVehicles()
 
       resetForm()
-      showToast(editing ? 'Vehiculo actualizado.' : 'Vehiculo agregado.')
+      showToast(editing ? 'Vehículo actualizado.' : 'Vehículo agregado.')
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'No pudimos guardar el vehiculo.')
+      console.error('Error saving vehicle:', err)
+      setFormError(err instanceof Error ? err.message : 'No pudimos guardar el vehículo.')
     } finally {
       setSaving(false)
     }
@@ -285,7 +286,7 @@ export default function VehiculosPage() {
   async function handleDelete(vehicle: SavedVehicle) {
     if (deletingId) return
 
-    const confirmed = window.confirm(`Eliminar ${vehicleTitle(vehicle)}?`)
+    const confirmed = window.confirm(`¿Eliminar ${vehicleTitle(vehicle)}?`)
     if (!confirmed) return
 
     setDeletingId(vehicle.id)
@@ -310,16 +311,17 @@ export default function VehiculosPage() {
       if (!response.ok || !payload?.ok) {
         throw new Error(
           payload && !payload.ok
-            ? payload.error ?? 'No pudimos eliminar el vehiculo.'
-            : 'No pudimos eliminar el vehiculo.',
+            ? payload.error ?? 'No pudimos eliminar el vehículo.'
+            : 'No pudimos eliminar el vehículo.',
         )
       }
 
       setVehicles((current) => current.filter((item) => item.id !== vehicle.id))
       if (form.id === vehicle.id) resetForm()
-      showToast('Vehiculo eliminado.')
+      showToast('Vehículo eliminado.')
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'No pudimos eliminar el vehiculo.')
+      console.error('Error deleting vehicle:', err)
+      showToast(err instanceof Error ? err.message : 'No pudimos eliminar el vehículo.')
     } finally {
       setDeletingId('')
     }
@@ -331,14 +333,14 @@ export default function VehiculosPage() {
     <>
       <section className="card-hero">
         <button className="btn-back" type="button" onClick={() => router.back()}>
-          Atras
+          Atrás
         </button>
         <p className="eyebrow" style={{ color: 'rgba(255,255,255,.72)' }}>Mi cuenta</p>
         <h2 style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, marginBottom: 6 }}>
-          Mis vehiculos
+          Mis vehículos
         </h2>
         <p style={{ fontSize: 13, opacity: .82 }}>
-          Guarda los datos de tus autos para solicitar traslados mas rapido.
+          Guarda los datos de tus autos para solicitar traslados más rápido.
         </p>
       </section>
 
@@ -356,26 +358,37 @@ export default function VehiculosPage() {
           <div>
             <p className="kicker">Garaje</p>
             <h2 style={{ fontSize: 16, fontWeight: 700 }}>
-              {vehicles.length} vehiculo{vehicles.length === 1 ? '' : 's'} guardado{vehicles.length === 1 ? '' : 's'}
+              {vehicles.length} vehículo{vehicles.length === 1 ? '' : 's'} guardado{vehicles.length === 1 ? '' : 's'}
             </h2>
           </div>
-          <button className="btn-mini" type="button" onClick={openCreateForm} aria-label="Agregar vehiculo">
-            +
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn-mini"
+              type="button"
+              onClick={() => loadVehicles()}
+              aria-label="Recargar vehículos"
+              style={{ fontSize: 16 }}
+            >
+              ↻
+            </button>
+            <button className="btn-mini" type="button" onClick={openCreateForm} aria-label="Agregar vehículo">
+              +
+            </button>
+          </div>
         </div>
 
         {loading ? (
           <div className="card" style={{ textAlign: 'center', padding: '28px 16px' }}>
-            <p className="muted">Cargando vehiculos...</p>
+            <p className="muted">Cargando vehículos...</p>
           </div>
         ) : vehicles.length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '28px 16px' }}>
-            <p style={{ fontWeight: 700, marginBottom: 4 }}>Aun no tienes vehiculos</p>
+            <p style={{ fontWeight: 700, marginBottom: 4 }}>Aún no tienes vehículos</p>
             <p className="muted" style={{ marginBottom: 14 }}>
-              Agrega tu primer vehiculo y lo podras reutilizar al solicitar un traslado.
+              Agrega tu primer vehículo y lo podrás reutilizar al solicitar un traslado.
             </p>
             <button className="btn-primary" type="button" onClick={openCreateForm}>
-              Agregar vehiculo
+              Agregar vehículo
             </button>
           </div>
         ) : (
@@ -402,7 +415,7 @@ export default function VehiculosPage() {
                     aria-label={`Editar ${vehicleTitle(vehicle)}`}
                     style={{ width: 46, fontSize: 11 }}
                   >
-                    Edit
+                    Editar
                   </button>
                   <button
                     className="btn-mini"
@@ -412,7 +425,7 @@ export default function VehiculosPage() {
                     aria-label={`Eliminar ${vehicleTitle(vehicle)}`}
                     style={{ color: 'var(--danger)', width: 46, fontSize: 11 }}
                   >
-                    {deletingId === vehicle.id ? '...' : 'Del'}
+                    {deletingId === vehicle.id ? '...' : 'Elim'}
                   </button>
                 </div>
               </article>
@@ -425,13 +438,13 @@ export default function VehiculosPage() {
         <section className="card">
           <div className="section-head">
             <div>
-              <p className="kicker">{editing ? 'Editar vehiculo' : 'Nuevo vehiculo'}</p>
+              <p className="kicker">{editing ? 'Editar vehículo' : 'Nuevo vehículo'}</p>
               <h2 style={{ fontSize: 16, fontWeight: 700 }}>
-                {editing ? vehicleTitle(form) : 'Datos del vehiculo'}
+                {editing ? vehicleTitle(form) : 'Datos del vehículo'}
               </h2>
             </div>
             <button className="btn-mini" type="button" onClick={resetForm} aria-label="Cerrar formulario">
-              x
+              ✕
             </button>
           </div>
 
@@ -450,7 +463,7 @@ export default function VehiculosPage() {
             </div>
 
             <div className="field-group">
-              <label className="field-label">Tipo de vehiculo</label>
+              <label className="field-label">Tipo de vehículo</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                 {VEHICLE_TYPES.map((type) => (
                   <button
@@ -505,7 +518,7 @@ export default function VehiculosPage() {
 
             <div className="field-row">
               <div className="field-group">
-                <label className="field-label" htmlFor="vehicle-year">Ano</label>
+                <label className="field-label" htmlFor="vehicle-year">Año</label>
                 <input
                   id="vehicle-year"
                   className="field-input"
@@ -570,7 +583,7 @@ export default function VehiculosPage() {
             </div>
 
             <div className="field-group">
-              <label className="field-label">Transmision</label>
+              <label className="field-label">Transmisión</label>
               <div style={{ display: 'flex', gap: 8 }}>
                 {TRANSMISSIONS.map((transmission) => (
                   <button
@@ -604,7 +617,7 @@ export default function VehiculosPage() {
                 value={form.condition}
                 onChange={(event) => update('condition', event.target.value)}
               >
-                <option value="">Selecciona una opcion</option>
+                <option value="">Selecciona una opción</option>
                 {CONDITIONS.map((condition) => (
                   <option key={condition} value={condition}>{condition}</option>
                 ))}
@@ -634,7 +647,7 @@ export default function VehiculosPage() {
                 disabled={!canSave || saving}
                 style={{ flex: 1, width: 'auto' }}
               >
-                {saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Agregar vehiculo'}
+                {saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Agregar vehículo'}
               </button>
             </div>
           </form>

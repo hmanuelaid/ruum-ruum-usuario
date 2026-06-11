@@ -69,7 +69,7 @@ function validateVehiclePayload(body: unknown, options: { partial: boolean }) {
   if (transmission !== undefined) payload.transmission = transmission
 
   if (!options.partial) {
-    for (const field of ['brand', 'model', 'plates', 'type', 'transmission'] as const) {
+    for (const field of ['brand', 'model', 'year', 'plates', 'type', 'transmission'] as const) {
       if (!payload[field]) return { error: `Campo requerido: ${field}` }
     }
   }

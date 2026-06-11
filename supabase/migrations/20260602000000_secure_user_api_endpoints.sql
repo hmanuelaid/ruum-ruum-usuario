@@ -18,6 +18,10 @@ create table if not exists public.notifications (
     check (type in ('trip', 'evidence', 'payment', 'info'))
 );
 
+alter table public.notifications
+  add column if not exists timestamp timestamptz not null default now(),
+  add column if not exists created_at timestamptz not null default now();
+
 create index if not exists notifications_user_timestamp_idx
   on public.notifications(user_id, timestamp desc);
 
@@ -267,7 +271,7 @@ begin
   end if;
 
   if vehicle_id_text is null then
-    if v_brand is null or v_model is null or v_plates is null or v_type is null or v_transmission is null then
+    if v_brand is null or v_model is null or v_year is null or v_plates is null or v_type is null or v_transmission is null then
       raise exception 'Campos requeridos incompletos';
     end if;
 

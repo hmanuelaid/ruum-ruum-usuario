@@ -1,3 +1,4 @@
+// middleware.ts
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { hasUserAccess } from '@/lib/auth-guards'
@@ -12,6 +13,8 @@ const USER_ROUTES = [
   '/notificaciones',
   '/cuenta',
   '/onboarding/documentos',
+   '/api/profile',       
+  '/api/user',    
 ]
 
 function matchesRoute(pathname: string, routes: string[]) {
@@ -82,12 +85,17 @@ export async function proxy(request: NextRequest) {
     },
   )
 
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
+  // 🔥 MEJORA: Usar getSession en lugar de getUser para validación inicial
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
-  if (error || !user) {
+  if (sessionError || !session) {
+    return redirectTo(request, PRIVATE_REDIRECT, response)
+  }
+
+  // Solo si hay sesión, obtener el usuario completo
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+  if (userError || !user) {
     return redirectTo(request, PRIVATE_REDIRECT, response)
   }
 
@@ -110,5 +118,8 @@ export const config = {
     '/notificaciones/:path*',
     '/cuenta/:path*',
     '/onboarding/documentos/:path*',
+    '/api/profile',      // 
+    '/api/user',         // 
   ],
 }
+

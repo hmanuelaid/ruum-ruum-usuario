@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createApiSupabaseClient, getAuthenticatedProfile, jsonError } from '@/lib/apiAuth'
+import { apiFetch } from '@/lib/api'
 
 const PROFILE_FIELDS = ['name', 'phone', 'country', 'state', 'address'] as const
 type ProfileField = (typeof PROFILE_FIELDS)[number]

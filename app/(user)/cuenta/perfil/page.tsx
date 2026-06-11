@@ -2,36 +2,46 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { createBrowserClient } from '@supabase/ssr'
 import { useAuthStore, useAppStore } from '@/lib/store'
 import type { User } from '@/lib/types'
 
-type UserProfile = {
-  id: string
-  name: string
-  email: string
-  phone?: string | null
-  country?: string | null
-  state?: string | null
-  address?: string | null
+function FieldGroup({ label, hint, id, children }: { label: string; hint?: string; id: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label htmlFor={id} style={{
+        fontSize: 12, fontWeight: 600,
+        color: 'var(--text-muted)',
+        textTransform: 'uppercase', letterSpacing: '0.05em',
+      }}>
+        {label}
+      </label>
+      {children}
+      {hint && (
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>{hint}</p>
+      )}
+    </div>
+  )
 }
 
-type ApiResponse<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string }
+const validatePhone = (phone: string): boolean => {
+  if (!phone) return true
+  return /^\+?[1-9]\d{1,14}$/.test(phone)
+}
 
 export default function PerfilPage() {
   const router = useRouter()
   const { user, setUser } = useAuthStore()
   const { showToast } = useAppStore()
+  
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   const [form, setForm] = useState({
-    name: '',
-    phone: '',
-    country: '',
-    state: '',
-    address: '',
+    name: '', phone: '', country: '', state: '', address: '',
   })
-
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -40,233 +50,258 @@ export default function PerfilPage() {
     async function loadProfile() {
       setLoading(true)
       setError('')
-
       try {
-        const response = await fetch('/api/profile', {
-          headers: { Accept: 'application/json' },
-        })
-
-        if (response.status === 401) {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError || !session) {
           router.replace('/login?redirectTo=/cuenta/perfil')
           return
         }
 
-        const payload = (await response.json().catch(() => null)) as ApiResponse<UserProfile> | null
+        let { data: profile, error: profileError } = await supabase
+          .from('app_users')
+          .select('*')
+          .eq('auth_id', session.user.id)
+          .single()
 
-        if (!response.ok || !payload?.ok) {
-          throw new Error(
-            payload && !payload.ok
-              ? payload.error ?? 'No pudimos cargar tu perfil.'
-              : 'No pudimos cargar tu perfil.',
-          )
+        if (profileError && profileError.code === 'PGRST116') {
+          const { data: newProfile, error: createError } = await supabase
+            .from('app_users')
+            .insert({
+              auth_id: session.user.id,
+              name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuario',
+              email: session.user.email,
+              phone: session.user.user_metadata?.phone || '',
+              country: null,
+              state: null,
+              address: null,
+            })
+            .select('*')
+            .single()
+
+          if (createError) throw createError
+          profile = newProfile
+        } else if (profileError) {
+          throw profileError
         }
 
-        setForm({
-          name: payload.data.name ?? '',
-          phone: payload.data.phone ?? '',
-          country: payload.data.country ?? '',
-          state: payload.data.state ?? '',
-          address: payload.data.address ?? '',
-        })
-
-        // ✅ Ahora todos los campos existen en el tipo User
-        const updatedUser: User = {
-          id: payload.data.id,
-          name: payload.data.name,
-          email: payload.data.email,
-          phone: payload.data.phone ?? '',
-          country: payload.data.country ?? '',
-          state: payload.data.state ?? '',
-          address: payload.data.address ?? '',
+        if (profile) {
+          setForm({
+            name: profile.name || '',
+            phone: profile.phone || '',
+            country: profile.country || '',
+            state: profile.state || '',
+            address: profile.address || '',
+          })
+          
+          setUser({
+            id: profile.id,
+            name: profile.name,
+            email: profile.email,
+            phone: profile.phone || '',
+            country: profile.country || '',
+            state: profile.state || '',
+            address: profile.address || '',
+          } as User)
         }
-        
-        setUser(updatedUser)
       } catch (err) {
+        console.error('Error loading profile:', err)
         setError(err instanceof Error ? err.message : 'No pudimos cargar tu perfil.')
       } finally {
         setLoading(false)
       }
     }
 
-    void loadProfile()
-  }, [router, setUser])
+    loadProfile()
+  }, [router, setUser, supabase])
 
   const setField = useCallback((field: keyof typeof form, value: string) => {
-    setForm((current) => ({ ...current, [field]: value }))
+    setForm(cur => ({ ...cur, [field]: value }))
   }, [])
 
-  const validatePhone = (phone: string): boolean => {
-    if (!phone) return true
-    const phoneRegex = /^\+?[1-9]\d{1,14}$/
-    return phoneRegex.test(phone)
-  }
-
-  const handleSubmit = useCallback(async (event: React.FormEvent) => {
-    event.preventDefault()
-
-    if (!form.name.trim()) {
-      setError('El nombre es obligatorio.')
-      return
-    }
-
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.name.trim()) { setError('El nombre es obligatorio.'); return }
     if (form.phone && !validatePhone(form.phone)) {
-      setError('Formato de teléfono inválido. Usa formato internacional (+525500000000)')
+      setError('Formato de teléfono inválido. Usa +525500000000')
       return
     }
-
+    
     setSaving(true)
     setError('')
-
+    
     try {
-      const response = await fetch('/api/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.replace('/login?redirectTo=/cuenta/perfil')
+        return
+      }
+
+      const { error: updateError } = await supabase
+        .from('app_users')
+        .update({
           name: form.name.trim(),
           phone: form.phone.trim() || null,
           country: form.country.trim() || null,
           state: form.state.trim() || null,
           address: form.address.trim() || null,
-        }),
-      })
+        })
+        .eq('auth_id', session.user.id)
 
-      const payload = (await response.json().catch(() => null)) as ApiResponse<UserProfile> | null
+      if (updateError) throw updateError
 
-      if (response.status === 401) {
-        router.replace('/login?redirectTo=/cuenta/perfil')
-        return
-      }
+      setUser({
+        ...user!,
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        country: form.country.trim(),
+        state: form.state.trim(),
+        address: form.address.trim(),
+      } as User)
 
-      if (!response.ok || !payload?.ok) {
-        throw new Error(
-          payload && !payload.ok
-            ? payload.error ?? 'No pudimos guardar tu perfil.'
-            : 'No pudimos guardar tu perfil.',
-        )
-      }
-
-      // ✅ Actualizar todos los campos del usuario
-      const updatedUser: User = {
-        id: payload.data.id,
-        name: payload.data.name,
-        email: payload.data.email,
-        phone: payload.data.phone ?? '',
-        country: payload.data.country ?? '',
-        state: payload.data.state ?? '',
-        address: payload.data.address ?? '',
-      }
-      
-      setUser(updatedUser)
       showToast('Perfil actualizado correctamente.')
       router.push('/cuenta')
     } catch (err) {
+      console.error('Error saving profile:', err)
       setError(err instanceof Error ? err.message : 'No pudimos guardar tu perfil.')
     } finally {
       setSaving(false)
     }
-  }, [form.name, form.phone, form.country, form.state, form.address, router, setUser, showToast])
+  }, [form, router, setUser, showToast, supabase, user])
+
+  if (loading) {
+    return (
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)', padding: '20px 16px',
+      }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>Cargando perfil…</p>
+      </div>
+    )
+  }
 
   return (
-    <main className="page-shell">
-      <section className="hero-card">
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+        <button
+          type="button"
+          onClick={() => router.back()}
+          style={{
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-sm)', width: 36, height: 36,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+          aria-label="Volver"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="var(--text)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+        </button>
         <div>
-          <button className="btn-back" type="button" onClick={() => router.back()}>
-            ← Atrás
-          </button>
-
-          <p className="eyebrow">Mi cuenta</p>
-          <h1>Editar perfil</h1>
-          <p className="muted">Actualiza tus datos personales.</p>
+          <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', margin: 0 }}>
+            Editar perfil
+          </p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+            Actualiza tus datos personales
+          </p>
         </div>
-      </section>
+      </div>
 
-      <section className="card">
-        {loading ? (
-          <p className="muted">Cargando perfil…</p>
-        ) : (
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <label className="field-label">Nombre completo *</label>
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)', padding: '20px 16px',
+      }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <FieldGroup label="Nombre completo *" id="name">
             <input
+              id="name"
+              name="name"
               className="field-input"
               value={form.name}
-              onChange={(event) => setField('name', event.target.value)}
+              onChange={e => setField('name', e.target.value)}
               placeholder="Tu nombre"
               required
             />
+          </FieldGroup>
 
-            <label className="field-label">Teléfono</label>
+          <FieldGroup label="Teléfono" hint="Formato internacional: +52 seguido del número" id="phone">
             <input
+              id="phone"
+              name="phone"
               className="field-input"
               type="tel"
               value={form.phone}
-              onChange={(event) => setField('phone', event.target.value)}
+              onChange={e => setField('phone', e.target.value)}
               placeholder="+525500000000"
             />
-            <p className="field-hint">Formato internacional: + código país y número</p>
+          </FieldGroup>
 
-            <label className="field-label">País</label>
+          <FieldGroup label="País" id="country">
             <input
+              id="country"
+              name="country"
               className="field-input"
               value={form.country}
-              onChange={(event) => setField('country', event.target.value)}
+              onChange={e => setField('country', e.target.value)}
               placeholder="Tu país"
             />
+          </FieldGroup>
 
-            <label className="field-label">Estado/Provincia</label>
+          <FieldGroup label="Estado / Provincia" id="state">
             <input
+              id="state"
+              name="state"
               className="field-input"
               value={form.state}
-              onChange={(event) => setField('state', event.target.value)}
+              onChange={e => setField('state', e.target.value)}
               placeholder="Tu estado o provincia"
             />
+          </FieldGroup>
 
-            <label className="field-label">Dirección</label>
+          <FieldGroup label="Dirección" id="address">
             <textarea
+              id="address"
+              name="address"
               className="field-input"
               value={form.address}
-              onChange={(event) => setField('address', event.target.value)}
+              onChange={e => setField('address', e.target.value)}
               placeholder="Tu dirección completa"
               rows={3}
+              style={{ resize: 'vertical', minHeight: 80, fontFamily: 'inherit' }}
             />
+          </FieldGroup>
 
-            {user?.email && (
-              <>
-                <label className="field-label">Correo electrónico</label>
-                <input 
-                  className="field-input" 
-                  value={user.email} 
-                  disabled 
-                  style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
-                />
-                <p className="field-hint">El correo electrónico no se puede modificar desde aquí.</p>
-              </>
-            )}
+          {user?.email && (
+            <FieldGroup label="Correo electrónico" hint="El correo no se puede modificar desde aquí." id="email">
+              <input
+                id="email"
+                name="email"
+                className="field-input"
+                value={user.email}
+                disabled
+                style={{ opacity: 0.5, cursor: 'not-allowed' }}
+              />
+            </FieldGroup>
+          )}
 
-            {error && (
-              <p className="field-error" role="alert">
-                {error}
-              </p>
-            )}
+          {error && (
+            <p style={{
+              fontSize: 12, color: 'var(--danger)',
+              background: 'rgba(239,68,68,0.08)',
+              border: '1px solid rgba(239,68,68,0.2)',
+              borderRadius: 8, padding: '10px 12px', margin: 0,
+            }} role="alert">
+              {error}
+            </p>
+          )}
 
-            <button className="btn-primary" type="submit" disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar cambios'}
-            </button>
-          </form>
-        )}
-      </section>
-
-      <style jsx>{`
-        .field-hint {
-          font-size: 0.75rem;
-          color: #666;
-          margin-top: -0.5rem;
-          margin-bottom: 1rem;
-        }
-        textarea.field-input {
-          resize: vertical;
-          min-height: 80px;
-        }
-      `}</style>
-    </main>
+          <button className="btn-primary" type="submit" disabled={saving}>
+            {saving ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        </form>
+      </div>
+    </>
   )
 }

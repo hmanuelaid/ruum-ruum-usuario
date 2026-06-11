@@ -1,246 +1,250 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-
-const SLIDES = [
-  {
-    icon: (
-      <svg viewBox="0 0 64 64" fill="none" style={{ width: 90, height: 90 }}>
-        <circle cx="32" cy="32" r="30" fill="rgba(26,124,250,0.12)" stroke="rgba(26,124,250,0.3)" strokeWidth="1.5"/>
-        <path d="M12 36 Q22 20 32 28 Q42 36 52 18" stroke="#1A7CFA" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
-        <circle cx="52" cy="18" r="4" fill="#1A7CFA"/>
-        <path d="M28 40 L32 28 L36 40" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-        <rect x="22" y="42" width="20" height="8" rx="2" fill="rgba(26,124,250,0.3)" stroke="#1A7CFA" strokeWidth="1.5"/>
-        <circle cx="25" cy="52" r="2.5" fill="#1A7CFA"/>
-        <circle cx="39" cy="52" r="2.5" fill="#1A7CFA"/>
-      </svg>
-    ),
-    tag: 'TRASLADOS CERTIFICADOS',
-    title: 'Mueve tu auto\nsin soltar el control.',
-    body: 'Solicita el traslado de tu vehículo con conductores certificados. Tú decides cuándo y a dónde.',
-  },
-  {
-    icon: (
-      <svg viewBox="0 0 64 64" fill="none" style={{ width: 90, height: 90 }}>
-        <circle cx="32" cy="32" r="30" fill="rgba(26,124,250,0.12)" stroke="rgba(26,124,250,0.3)" strokeWidth="1.5"/>
-        <rect x="18" y="16" width="28" height="22" rx="3" stroke="#1A7CFA" strokeWidth="2" fill="none"/>
-        <circle cx="32" cy="27" r="5" stroke="#ffffff" strokeWidth="2" fill="none"/>
-        <path d="M22 44 L26 38 L30 42 L34 36 L38 40 L42 34 L42 44Z" fill="rgba(26,124,250,0.25)" stroke="#1A7CFA" strokeWidth="1.5" strokeLinejoin="round"/>
-        <circle cx="32" cy="27" r="2" fill="#1A7CFA"/>
-      </svg>
-    ),
-    tag: 'TRAZABILIDAD TOTAL',
-    title: 'Evidencia en\ncada etapa.',
-    body: 'Fotos, kilometraje y estatus en tiempo real. Tu vehículo documentado desde que lo entregamos hasta que lo recibes.',
-  },
-  {
-    icon: (
-      <svg viewBox="0 0 64 64" fill="none" style={{ width: 90, height: 90 }}>
-        <circle cx="32" cy="32" r="30" fill="rgba(26,124,250,0.12)" stroke="rgba(26,124,250,0.3)" strokeWidth="1.5"/>
-        <path d="M32 14 L44 20 L44 34 C44 41 38 47 32 50 C26 47 20 41 20 34 L20 20 Z" stroke="#1A7CFA" strokeWidth="2" fill="rgba(26,124,250,0.15)" strokeLinejoin="round"/>
-        <path d="M26 32 L30 36 L38 28" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    ),
-    tag: 'SEGURIDAD Y CONFIANZA',
-    title: 'Confianza desde\nel primer viaje.',
-    body: 'Conductores verificados, rutas registradas y soporte disponible. Ruum Ruum es tu plataforma de traslados de confianza.',
-  },
-]
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const [current, setCurrent] = useState(0)
-  const [animating, setAnimating] = useState(false)
-  const slide = SLIDES[current]
+  const [step, setStep] = useState<'intro' | 'welcome'>('intro')
 
-  function goTo(index: number) {
-    if (animating || index === current) return
-    setAnimating(true)
-    setTimeout(() => { setCurrent(index); setAnimating(false) }, 200)
-  }
+  if (step === 'intro') return <IntroScreen onContinue={() => setStep('welcome')} />
+  return <WelcomeScreen />
+}
 
-  function next() {
-    if (current < SLIDES.length - 1) goTo(current + 1)
-    else router.push('/onboarding/registro')
-  }
-
-  // Swipe support
-  useEffect(() => {
-    let startX = 0
-    const onTouchStart = (e: TouchEvent) => { startX = e.touches[0].clientX }
-    const onTouchEnd = (e: TouchEvent) => {
-      const dx = e.changedTouches[0].clientX - startX
-      if (dx < -50 && current < SLIDES.length - 1) goTo(current + 1)
-      if (dx > 50 && current > 0) goTo(current - 1)
-    }
-    window.addEventListener('touchstart', onTouchStart)
-    window.addEventListener('touchend', onTouchEnd)
-    return () => { window.removeEventListener('touchstart', onTouchStart); window.removeEventListener('touchend', onTouchEnd) }
-  }, [current, animating])
-
+/* ─── Pantalla 1: Intro ─── */
+function IntroScreen({ onContinue }: { onContinue: () => void }) {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: 'linear-gradient(180deg, #070d1f 0%, #0a1428 60%, #0c1a35 100%)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '0',
-      position: 'relative',
-      overflow: 'hidden',
-      maxWidth: 430,
-      margin: '0 auto',
+      background: 'linear-gradient(180deg, #060c1e 0%, #091224 55%, #0b1830 100%)',
+      display: 'flex', flexDirection: 'column',
+      padding: '3.5rem 1.75rem 3rem',
+      maxWidth: 430, margin: '0 auto',
     }}>
 
-      {/* Decorative glow */}
-      <div style={{
-        position: 'absolute', top: -80, left: '50%', transform: 'translateX(-50%)',
-        width: 320, height: 320, borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(26,124,250,0.18) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }}/>
-
-      {/* Skip */}
-      <button
-        onClick={() => router.push('/onboarding/registro')}
-        style={{
-          position: 'absolute', top: '1.25rem', right: '1.25rem',
-          background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
-          color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer',
-          padding: '6px 14px', borderRadius: 20, zIndex: 10,
-        }}>
-        Omitir
-      </button>
-
       {/* Logo */}
-      <div style={{ paddingTop: '3.5rem', textAlign: 'center' }}>
+      <div style={{ marginBottom: '2.5rem' }}>
         <RuumLogo />
-        <p style={{ fontSize: 10, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>
+        <p style={{ fontSize: 9, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.35)', marginTop: 5 }}>
           BY MOVILIAX
         </p>
       </div>
 
-      {/* Slide content */}
-      <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        padding: '2rem 2rem 0',
-        opacity: animating ? 0 : 1,
-        transform: animating ? 'translateY(8px)' : 'translateY(0)',
-        transition: 'opacity 0.2s ease, transform 0.2s ease',
-        textAlign: 'center',
-        gap: '1.25rem',
+      {/* Línea acento */}
+      <div style={{ width: 32, height: 3, background: '#1A7CFA', borderRadius: 2, marginBottom: '2rem' }} />
+
+      {/* Headline */}
+      <h1 style={{
+        fontSize: '2rem', fontWeight: 900, lineHeight: 1.15,
+        color: '#ffffff', margin: '0 0 1.25rem',
       }}>
+        Mueve tu auto<br />sin soltar el control.
+      </h1>
 
-        {/* Icon */}
-        <div style={{
-          width: 140, height: 140,
-          background: 'rgba(26,124,250,0.08)',
-          borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          border: '1px solid rgba(26,124,250,0.2)',
-        }}>
-          {slide.icon}
-        </div>
+      {/* Descripción */}
+      <p style={{
+        fontSize: '0.95rem', lineHeight: 1.65,
+        color: 'rgba(255,255,255,0.5)', margin: '0 0 2.5rem',
+        maxWidth: 300,
+      }}>
+        Plataforma digital para traslados vehiculares con conductores certificados,
+        evidencia en cada etapa y control total del viaje.
+      </p>
 
-        {/* Tag */}
-        <span style={{
-          fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
-          color: '#1A7CFA', textTransform: 'uppercase',
-        }}>
-          {slide.tag}
-        </span>
+      {/* Grid de features */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr',
+        gap: '1.5rem 1rem', marginBottom: '3rem',
+      }}>
+        {FEATURES.map(f => (
+          <FeatureItem key={f.label} icon={f.icon} label={f.label} />
+        ))}
+      </div>
 
-        {/* Title */}
-        <h1 style={{
-          fontSize: '1.75rem', fontWeight: 800, lineHeight: 1.2,
-          color: '#ffffff', margin: 0,
-          whiteSpace: 'pre-line',
-        }}>
-          {slide.title}
-        </h1>
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
 
-        {/* Body */}
-        <p style={{
-          fontSize: '0.9rem', lineHeight: 1.6,
-          color: 'rgba(255,255,255,0.55)', margin: 0,
-          maxWidth: 300,
+      {/* Botón */}
+      <button
+        onClick={onContinue}
+        style={{
+          width: '100%', padding: '14px',
+          background: '#1A7CFA',
+          color: '#ffffff', fontWeight: 700, fontSize: 15,
+          border: 'none', borderRadius: 14, cursor: 'pointer',
+          boxShadow: '0 4px 24px rgba(26,124,250,0.4)',
         }}>
-          {slide.body}
+        Continuar
+      </button>
+    </div>
+  )
+}
+
+/* ─── Pantalla 2: Bienvenida ─── */
+function WelcomeScreen() {
+  const router = useRouter()
+  return (
+    <div style={{
+      minHeight: '100dvh',
+      background: 'linear-gradient(180deg, #060c1e 0%, #091224 55%, #0b1830 100%)',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'space-between',
+      padding: '3.5rem 1.5rem 3rem',
+      position: 'relative', overflow: 'hidden',
+      maxWidth: 430, margin: '0 auto',
+    }}>
+
+      <div style={{
+        position: 'absolute', top: 60, left: '50%', transform: 'translateX(-50%)',
+        width: 300, height: 300, borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(26,124,250,0.16) 0%, transparent 68%)',
+        pointerEvents: 'none',
+      }} />
+
+      <div style={{ textAlign: 'center', lineHeight: 1, position: 'relative', zIndex: 2 }}>
+        <RuumLogo />
+        <p style={{ fontSize: 9, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.35)', marginTop: 5 }}>
+          BY MOVILIAX
         </p>
       </div>
 
-      {/* Bottom section */}
-      <div style={{
-        width: '100%', padding: '2rem 1.5rem 3rem',
-        display: 'flex', flexDirection: 'column', gap: '1.25rem',
-        alignItems: 'center',
-      }}>
+      <div style={{ position: 'relative', zIndex: 2 }}>
+        <RouteIllustration />
+      </div>
 
-        {/* Dots */}
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {SLIDES.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => goTo(i)}
-              style={{
-                width: i === current ? 22 : 7,
-                height: 7,
-                borderRadius: 4,
-                background: i === current ? '#1A7CFA' : 'rgba(255,255,255,0.2)',
-                border: 'none', cursor: 'pointer', padding: 0,
-                transition: 'width 0.25s ease, background 0.25s ease',
-              }}
-            />
-          ))}
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12, position: 'relative', zIndex: 2 }}>
+        <div style={{ marginBottom: 4 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#ffffff', margin: 0 }}>Bienvenido</h1>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', margin: '4px 0 0' }}>
+            Inicia sesión para continuar
+          </p>
         </div>
 
-        {/* CTA */}
-        <button
-          onClick={next}
-          style={{
-            width: '100%', padding: '1rem',
-            background: '#1A7CFA',
-            color: '#ffffff', fontWeight: 700, fontSize: '1rem',
-            border: 'none', borderRadius: 14, cursor: 'pointer',
-            boxShadow: '0 4px 24px rgba(26,124,250,0.4)',
-            transition: 'opacity 0.15s',
-          }}>
-          {current < SLIDES.length - 1 ? 'Siguiente' : 'Comenzar'}
-        </button>
-
-        {/* Already have account */}
         <button
           onClick={() => router.push('/login')}
           style={{
-            background: 'none', border: 'none',
-            color: 'rgba(255,255,255,0.45)', fontSize: 13,
-            cursor: 'pointer', padding: 0,
+            width: '100%', padding: '14px',
+            background: '#1A7CFA',
+            color: '#ffffff', fontWeight: 700, fontSize: 15,
+            border: 'none', borderRadius: 14, cursor: 'pointer',
+            boxShadow: '0 4px 24px rgba(26,124,250,0.4)',
           }}>
-          Ya tengo una cuenta →
+          Iniciar sesión
+        </button>
+
+        <button
+          onClick={() => router.push('/onboarding/registro')}
+          style={{
+            width: '100%', padding: '14px',
+            background: 'transparent',
+            color: 'rgba(255,255,255,0.75)', fontWeight: 600, fontSize: 15,
+            border: '1.5px solid rgba(255,255,255,0.2)',
+            borderRadius: 14, cursor: 'pointer',
+          }}>
+          Registrarme
         </button>
       </div>
     </div>
   )
 }
 
+/* ─── Feature item ─── */
+const FEATURES = [
+  { icon: 'shield-check', label: 'CONDUCTORES\nCERTIFICADOS' },
+  { icon: 'camera',       label: 'EVIDENCIA EN\nCADA ETAPA' },
+  { icon: 'map-pin',      label: 'TRAZABILIDAD\nEN TIEMPO REAL' },
+  { icon: 'lock',         label: 'SEGURIDAD Y\nCONFIANZA' },
+]
+
+function FeatureItem({ icon, label }: { icon: string; label: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{
+        width: 52, height: 52, borderRadius: '50%',
+        border: '1.5px solid rgba(26,124,250,0.35)',
+        background: 'rgba(26,124,250,0.08)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {/* Usamos SVG icons inline que coinciden con la imagen */}
+        <FeatureIcon name={icon} />
+      </div>
+      <span style={{
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+        color: 'rgba(255,255,255,0.6)', whiteSpace: 'pre-line', lineHeight: 1.4,
+      }}>
+        {label}
+      </span>
+    </div>
+  )
+}
+
+function FeatureIcon({ name }: { name: string }) {
+  const s = { width: 22, height: 22, stroke: '#1A7CFA', fill: 'none', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+ const icons: Record<string, React.ReactElement> = {
+    'shield-check': (
+      <svg viewBox="0 0 24 24" {...s}>
+        <path d="M12 2L4 5v6c0 5 3.6 9.3 8 10.5C16.4 20.3 20 16 20 11V5l-8-3z"/>
+        <path d="M9 12l2 2 4-4"/>
+      </svg>
+    ),
+    'camera': (
+      <svg viewBox="0 0 24 24" {...s}>
+        <rect x="2" y="7" width="20" height="14" rx="2"/>
+        <circle cx="12" cy="14" r="3"/>
+        <path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/>
+      </svg>
+    ),
+    'map-pin': (
+      <svg viewBox="0 0 24 24" {...s}>
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+        <circle cx="12" cy="9" r="2.5"/>
+      </svg>
+    ),
+    'lock': (
+      <svg viewBox="0 0 24 24" {...s}>
+        <rect x="5" y="11" width="14" height="10" rx="2"/>
+        <path d="M8 11V7a4 4 0 018 0v4"/>
+        <circle cx="12" cy="16" r="1" fill="#1A7CFA"/>
+      </svg>
+    ),
+  }
+  return icons[name] ?? null
+}
+
+/* ─── Logo ─── */
 function RuumLogo() {
   return (
-    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0, lineHeight: 1 }}>
-      <span style={{
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: 36, fontWeight: 900, letterSpacing: '-0.02em',
-        color: '#ffffff',
-        textTransform: 'lowercase',
-      }}>ruum</span>
-      <span style={{
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: 36, fontWeight: 900, letterSpacing: '-0.02em',
-        color: '#1A7CFA',
-        textTransform: 'lowercase',
-        marginTop: -6,
-      }}>ruum</span>
+    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
+      <span style={{ fontFamily: 'system-ui, sans-serif', fontSize: 38, fontWeight: 900, letterSpacing: '-0.02em', color: '#ffffff', textTransform: 'lowercase' }}>ruum</span>
+      <span style={{ fontFamily: 'system-ui, sans-serif', fontSize: 38, fontWeight: 900, letterSpacing: '-0.02em', color: '#1A7CFA', textTransform: 'lowercase', marginTop: -10 }}>ruum</span>
     </div>
+  )
+}
+
+/* ─── Ilustración ruta ─── */
+function RouteIllustration() {
+  return (
+    <svg viewBox="0 0 320 220" width="320" height="220" style={{ display: 'block' }}>
+      <defs>
+        <filter id="glow-line"><feGaussianBlur stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="car-glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <path d="M35 195 Q65 195 90 172 Q125 135 102 106 Q80 78 115 55 Q148 32 182 48 Q218 65 252 42 Q278 22 298 24" stroke="rgba(26,124,250,0.22)" strokeWidth="2" fill="none" strokeDasharray="5 5"/>
+      <path d="M35 195 Q65 195 90 172 Q125 135 102 106 Q80 78 115 55 Q148 32 182 48 Q218 65 252 42 Q278 22 298 24" stroke="#1A7CFA" strokeWidth="1.5" fill="none" filter="url(#glow-line)" strokeDasharray="7 3"/>
+      <circle cx="35" cy="195" r="6" fill="rgba(26,124,250,0.18)" stroke="#1A7CFA" strokeWidth="1.5"/>
+      <circle cx="35" cy="195" r="2.5" fill="#1A7CFA"/>
+      <circle cx="298" cy="24" r="5" fill="rgba(26,124,250,0.22)" stroke="#1A7CFA" strokeWidth="1.5"/>
+      <circle cx="298" cy="24" r="2.5" fill="#1A7CFA"/>
+      <circle cx="298" cy="24" r="10" fill="none" stroke="rgba(26,124,250,0.3)" strokeWidth="1">
+        <animate attributeName="r" values="10;18;10" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.8;0;0.8" dur="2s" repeatCount="indefinite"/>
+      </circle>
+      <g filter="url(#car-glow)">
+        <rect x="94" y="97" width="32" height="16" rx="6" fill="#1A7CFA" opacity="0.9"/>
+        <rect x="98" y="89" width="22" height="11" rx="4" fill="#5BA8FF" opacity="0.8"/>
+        <circle cx="99" cy="113" r="4.5" fill="#091224" stroke="#1A7CFA" strokeWidth="1.5"/>
+        <circle cx="117" cy="113" r="4.5" fill="#091224" stroke="#1A7CFA" strokeWidth="1.5"/>
+        <ellipse cx="126" cy="101" rx="7" ry="3" fill="rgba(26,124,250,0.3)"/>
+      </g>
+    </svg>
   )
 }

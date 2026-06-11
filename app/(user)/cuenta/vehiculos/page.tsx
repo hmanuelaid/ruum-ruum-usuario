@@ -152,7 +152,8 @@ export default function VehiculosPage() {
     setError('')
 
     try {
-      const response = await fetch('/api/vehicles?_=${Date.now()}', {
+      const response = await fetch(`/api/vehicles?_=${Date.now()}`, {
+        cache: 'no-store',
         headers: { Accept: 'application/json' },
       })
 

@@ -1,6 +1,16 @@
 import type { NextConfig } from "next";
 
-const CSP = "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none';";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://*.supabase.co';
+const SUPABASE_HOST = SUPABASE_URL.replace(/\/$/, '');
+
+const CSP = [
+  "default-src 'self'",
+  `connect-src 'self' ${SUPABASE_HOST} ${SUPABASE_HOST.replace('https://', 'wss://')}`,
+  "img-src 'self' data: https:",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "frame-ancestors 'none'",
+].join('; ');
 
 const nextConfig: NextConfig = {
   async headers() {

@@ -90,10 +90,7 @@ export async function GET() {
     return jsonError('Sesion no autenticada.', 401)
   }
 
-  const { data, error } = await supabase
-    .from('vehicles')
-    .select('id, alias, brand, model, year, color, plates, vin, type, transmission, condition')
-    .eq('owner_id', auth.profile.id)
+  const { data, error } = await supabase.rpc('get_user_vehicles')
 
   if (error) {
     return jsonError(error.message, 500)

@@ -223,16 +223,16 @@ export default function RegistroPage() {
 
             <form onSubmit={handleCreateAccount} className="auth-form">
               <label className="field-label">Nombre(s)</label>
-              <input className="field-input" placeholder="Juan Carlos"
+              <input className="field-input" placeholder="JUAN CARLOS"
                 value={form.firstName}
-                onChange={e => update('firstName', e.target.value)}
+                onChange={e => update('firstName', e.target.value.replace(/\b\w/g, c => c.toUpperCase()))}
                 autoCapitalize="words"
                 required />
 
               <label className="field-label">Apellido(s)</label>
-              <input className="field-input" placeholder="García López"
+              <input className="field-input" placeholder="GARCIA LOPEZ"
                 value={form.lastName}
-                onChange={e => update('lastName', e.target.value)}
+                onChange={e => update('lastName', e.target.value.replace(/\b\w/g, c => c.toUpperCase()))}
                 autoCapitalize="words"
                 required />
 
@@ -251,7 +251,7 @@ export default function RegistroPage() {
                   type={showPwd ? 'text' : 'password'}
                   placeholder="Mínimo 8 caracteres"
                   value={form.password}
-                  onChange={e => update('password', e.target.value.toUpperCase())}
+                  onChange={e => update('password', e.target.value)}
                   autoComplete="new-password"
                   minLength={8}
                   required
@@ -266,6 +266,7 @@ export default function RegistroPage() {
                   {showPwd ? <EyeOff /> : <EyeOpen />}
                 </button>
               </div>
+
               <label className="field-label">Confirmar contraseña</label>
               <div style={{ position: 'relative' }}>
                 <input
@@ -273,7 +274,7 @@ export default function RegistroPage() {
                   type={showConfirm ? 'text' : 'password'}
                   placeholder="Repite tu contraseña"
                   value={form.confirmPassword}
-                  onChange={e => update('confirmPassword', e.target.value.toUpperCase())}
+                  onChange={e => update('confirmPassword', e.target.value)}
                   autoComplete="new-password"
                   minLength={8}
                   required

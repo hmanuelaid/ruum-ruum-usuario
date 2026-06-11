@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { clientLogger } from '@/lib/clientLogger'
 import { createBrowserClient } from '@supabase/ssr'
 import { useAuthStore, useAppStore } from '@/lib/store'
 import type { User } from '@/lib/types'
@@ -58,11 +59,13 @@ export default function PerfilPage() {
           return
         }
 
-        let { data: profile, error: profileError } = await supabase
+        const { data, error: profileError } = await supabase
           .from('app_users')
           .select('*')
           .eq('auth_id', session.user.id)
           .single()
+
+        let profile = data
 
         if (profileError && profileError.code === 'PGRST116') {
           const { data: newProfile, error: createError } = await supabase
@@ -105,7 +108,7 @@ export default function PerfilPage() {
           } as User)
         }
       } catch (err) {
-        console.error('Error loading profile:', err)
+        clientLogger.error('Error loading profile:', err)
         setError(err instanceof Error ? err.message : 'No pudimos cargar tu perfil.')
       } finally {
         setLoading(false)
@@ -162,7 +165,7 @@ export default function PerfilPage() {
       showToast('Perfil actualizado correctamente.')
       router.push('/cuenta')
     } catch (err) {
-      console.error('Error saving profile:', err)
+      clientLogger.error('Error saving profile:', err)
       setError(err instanceof Error ? err.message : 'No pudimos guardar tu perfil.')
     } finally {
       setSaving(false)

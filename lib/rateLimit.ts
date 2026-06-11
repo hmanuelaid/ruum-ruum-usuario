@@ -50,6 +50,11 @@ function parseWindowMs(window: RateLimitConfig['window']) {
 function getRedisLimiter(config: RateLimitConfig) {
   const url = process.env.UPSTASH_REDIS_REST_URL
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
+  // Enforce Redis in production to avoid bypass of rate limits
+  if (process.env.NODE_ENV === 'production' && (!url || !token)) {
+    throw new Error('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required in production')
+  }
+
   if (!url || !token) return null
 
   const key = `${config.prefix}:${config.limit}:${config.window}`

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createApiSupabaseClient, getAuthenticatedProfile, jsonError } from '@/lib/apiAuth'
-import { apiFetch } from '@/lib/api'
+import { logger } from '@/lib/logger'
 
 const PROFILE_FIELDS = ['name', 'phone', 'country', 'state', 'address'] as const
 type ProfileField = (typeof PROFILE_FIELDS)[number]
@@ -98,7 +98,7 @@ export async function GET() {
     return NextResponse.json({ ok: true, data: response })
     
   } catch (error) {
-    console.error('Unexpected error:', error)
+    logger.error({ err: error instanceof Error ? error.message : String(error) }, 'Unexpected error in profile GET')
     return jsonError('Error interno del servidor', 500)
   }
 }
@@ -128,7 +128,7 @@ export async function PATCH(req: Request) {
     })
 
     if (updateError || !updatedProfile) {
-      console.error('Update error:', updateError)
+      logger.error({ err: updateError?.message ?? 'unknown', code: (updateError as { code?: string })?.code }, 'Update error in profile PATCH')
       return jsonError(updateError?.message ?? 'Error al actualizar perfil', 400)
     }
     
@@ -145,7 +145,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: true, data: response })
     
   } catch (error) {
-    console.error('Unexpected error:', error)
+    logger.error({ err: error instanceof Error ? error.message : String(error) }, 'Unexpected error in profile PATCH')
     return jsonError('Error interno del servidor', 500)
   }
 }
@@ -197,7 +197,7 @@ export async function POST(req: Request) {
       },
     })
   } catch (error) {
-    console.error('Unexpected error:', error)
+    logger.error({ err: error instanceof Error ? error.message : String(error) }, 'Unexpected error in profile POST')
     return jsonError('Error interno del servidor', 500)
   }
 }

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test tests/security.test.mjs",
-    "audit:security": "npm audit --audit-level=moderate"
+    "audit:security": "npm audit --audit-level=moderate",
+    "precommit:check": "node scripts/precommit-check.js"
   },
   "dependencies": {
     "@ruum/types": "file:./packages/ruum-types",
@@ -21,6 +22,10 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "zustand": "^5.0.14"
+  },
+  "optionalDependencies": {
+    "pino": "^8.21.0",
+    "pino-pretty": "^10.3.1"
   },
   "overrides": {
     "postcss": "8.5.10"

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { clientLogger } from '@/lib/clientLogger'
 import { useAppStore } from '@/lib/store'
 import type { TransmissionType, VehicleType } from '@/lib/types'
 import {
@@ -172,7 +173,7 @@ export default function VehiculosPage() {
 
       setVehicles(payload.data || [])
     } catch (err) {
-      console.error('Error loading vehicles:', err)
+      clientLogger.error('Error loading vehicles:', err)
       setError(err instanceof Error ? err.message : 'No pudimos cargar tus vehículos.')
       setVehicles([])
     } finally {
@@ -181,7 +182,9 @@ export default function VehiculosPage() {
   }, [router])
 
   useEffect(() => {
-    loadVehicles()
+    void (async () => {
+      await loadVehicles()
+    })()
   }, [loadVehicles])
 
   function clearFieldError(field: string) {
@@ -276,7 +279,7 @@ export default function VehiculosPage() {
       resetForm()
       showToast(editing ? 'Vehículo actualizado.' : 'Vehículo agregado.')
     } catch (err) {
-      console.error('Error saving vehicle:', err)
+      clientLogger.error('Error saving vehicle:', err)
       setFormError(err instanceof Error ? err.message : 'No pudimos guardar el vehículo.')
     } finally {
       setSaving(false)
@@ -320,7 +323,7 @@ export default function VehiculosPage() {
       if (form.id === vehicle.id) resetForm()
       showToast('Vehículo eliminado.')
     } catch (err) {
-      console.error('Error deleting vehicle:', err)
+      clientLogger.error('Error deleting vehicle:', err)
       showToast(err instanceof Error ? err.message : 'No pudimos eliminar el vehículo.')
     } finally {
       setDeletingId('')

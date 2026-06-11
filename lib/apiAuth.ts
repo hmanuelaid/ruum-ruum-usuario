@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { logger } from './logger'
 
 export async function createApiSupabaseClient() {
   const cookieStore = await cookies()
@@ -77,14 +78,14 @@ export async function getAuthenticatedProfile(supabase: SupabaseClient) {
         .select('id, name, email, phone, country, state, address')
         .single()
       
-      if (createError) {
-        console.error('Error creating app user profile:', createError)
-        return null
-      }
+        if (createError) {
+          logger.error({ err: createError?.message ?? 'unknown', code: createError?.code }, 'Error creating app user profile')
+          return null
+        }
       
       profile = newProfile
     } else if (profileError) {
-      console.error('App user profile error:', profileError)
+      logger.error({ err: profileError?.message ?? 'unknown', code: profileError?.code }, 'App user profile error')
       return null
     }
 
@@ -105,7 +106,7 @@ export async function getAuthenticatedProfile(supabase: SupabaseClient) {
       }
     }
   } catch (error) {
-    console.error('Error in getAuthenticatedProfile:', error)
+    logger.error({ err: error instanceof Error ? error.message : String(error) }, 'Error in getAuthenticatedProfile')
     return null
   }
 }

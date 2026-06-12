@@ -1,10 +1,36 @@
 'use client'
+import { useState } from 'react'
 import { useWizardStore } from '@/lib/store'
+
+function toLocalDateTimeInputValue(date: Date) {
+  const offsetMs = date.getTimezoneOffset() * 60_000
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
+}
 
 export default function ScheduleStep() {
   const { draft, updateDraft, setStep } = useWizardStore()
+  const [error, setError] = useState('')
 
   const canContinue = draft.asap || !!draft.scheduledAt
+  const minDateTime = toLocalDateTimeInputValue(new Date())
+
+  function handleContinue() {
+    if (!draft.asap) {
+      if (!draft.scheduledAt) {
+        setError('Selecciona fecha y hora para programar el viaje.')
+        return
+      }
+
+      const selectedTime = new Date(draft.scheduledAt).getTime()
+      if (!Number.isFinite(selectedTime) || selectedTime < Date.now() - 5 * 60 * 1000) {
+        setError('La fecha programada debe ser futura.')
+        return
+      }
+    }
+
+    setError('')
+    setStep(4)
+  }
 
   return (
     <div className="form-section">
@@ -12,7 +38,10 @@ export default function ScheduleStep() {
       {/* ¿Cuándo? */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button
-          onClick={() => updateDraft({ asap: true, scheduledAt: undefined })}
+          onClick={() => {
+            setError('')
+            updateDraft({ asap: true, scheduledAt: undefined })
+          }}
           style={{
             background: draft.asap ? 'var(--primary-dim)' : 'var(--surface-2)',
             border: `1px solid ${draft.asap ? 'var(--primary)' : 'var(--border)'}`,
@@ -24,7 +53,10 @@ export default function ScheduleStep() {
         </button>
 
         <button
-          onClick={() => updateDraft({ asap: false })}
+          onClick={() => {
+            setError('')
+            updateDraft({ asap: false })
+          }}
           style={{
             background: !draft.asap ? 'var(--primary-dim)' : 'var(--surface-2)',
             border: `1px solid ${!draft.asap ? 'var(--primary)' : 'var(--border)'}`,
@@ -43,8 +75,12 @@ export default function ScheduleStep() {
             <label className="field-label">Fecha y hora de recolección</label>
             <input className="field-input" type="datetime-local"
               value={draft.scheduledAt ?? ''}
-              min={new Date().toISOString().slice(0, 16)}
-              onChange={e => updateDraft({ scheduledAt: e.target.value })} />
+              min={minDateTime}
+              onChange={e => {
+                setError('')
+                updateDraft({ scheduledAt: e.target.value })
+              }} />
+            {error && <p className="field-error">{error}</p>}
           </div>
         </div>
       )}
@@ -88,7 +124,7 @@ export default function ScheduleStep() {
         </div>
       </div>
 
-      <button className="btn-primary" disabled={!canContinue} onClick={() => setStep(4)}>
+      <button className="btn-primary" disabled={!canContinue} onClick={handleContinue}>
         Continuar →
       </button>
     </div>

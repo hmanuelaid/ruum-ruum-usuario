@@ -103,6 +103,10 @@ export default function ReviewStep() {
   async function handleConfirm() {
     if (!user) { showToast('Debes iniciar sesión'); return }
 
+    const scheduledAt = draft.scheduledAt
+      ? new Date(draft.scheduledAt).toISOString()
+      : undefined
+
     const validation = validateTripRequestPayload({
       serviceType: draft.serviceType ?? 'personal',
       vehicle: draft.vehicle,
@@ -111,7 +115,7 @@ export default function ReviewStep() {
       originContact: draft.originContact,
       destinationContact: draft.destinationContact,
       asap: Boolean(draft.asap),
-      scheduledAt: draft.scheduledAt,
+      scheduledAt,
       specialInstructions: draft.specialInstructions,
     })
 

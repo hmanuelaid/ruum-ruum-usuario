@@ -3,14 +3,15 @@ import { useAppStore } from '@/lib/store'
 
 const STATUS_LABELS: Record<string, string> = {
   solicitud_recibida:   'Solicitud recibida',
-  en_revision:          'En revisión',
+  pendiente_revision:   'En revisión',
+  pendiente_asignacion: 'Sin conductor',
   conductor_asignado:   'Conductor asignado',
-  en_camino_origen:     'En camino al origen',
+  conductor_en_camino:  'En camino al origen',
   recoleccion_proceso:  'Recolección en proceso',
-  vehiculo_documentado: 'Vehículo documentado',
+  evidencia_inicial_pendiente: 'Evidencia inicial pendiente',
   traslado_curso:       'Traslado en curso',
-  llegando_destino:     'Llegando a destino',
   entrega_proceso:      'Entrega en proceso',
+  evidencia_final_pendiente: 'Evidencia final pendiente',
   finalizado:           'Finalizado',
   cancelado:            'Cancelado',
   incidente:            'En revisión por incidente',
@@ -42,7 +43,7 @@ export default function TripDetailSheet() {
               <div>
                 <p className="kicker">Viaje {activeTrip.id}</p>
                 <h2 style={{ fontSize: 18, fontWeight: 700 }}>
-                  {STATUS_LABELS[activeTrip.status]}
+                  {STATUS_LABELS[activeTrip.status] ?? activeTrip.status}
                 </h2>
               </div>
               <button className="btn-icon" onClick={() => setActiveTrip(null)} aria-label="Cerrar">
@@ -158,6 +159,7 @@ export default function TripDetailSheet() {
             {/* Timeline */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <p className="kicker" style={{ marginBottom: 8 }}>Línea de tiempo</p>
+              {activeTrip.timeline.length > 0 ? (
               <ol className="timeline">
                 {activeTrip.timeline.map((item) => (
                   <li key={item.step}
@@ -184,6 +186,11 @@ export default function TripDetailSheet() {
                   </li>
                 ))}
               </ol>
+              ) : (
+                <div className="card" style={{ padding: '14px' }}>
+                  <p className="muted">La línea de tiempo aparecerá cuando el traslado avance.</p>
+                </div>
+              )}
             </div>
 
             {/* Evidencia disponible */}

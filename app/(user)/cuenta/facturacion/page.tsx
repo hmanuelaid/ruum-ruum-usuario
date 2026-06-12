@@ -1,9 +1,10 @@
+
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { clientLogger } from '@/lib/clientLogger'
-import { createBrowserClient } from '@supabase/ssr'
+import { createBrowserClient } from '@supabase/ssr'   // solo para Storage (upload de constancia)
 import { useAppStore } from '@/lib/store'
 
 // ─── Catálogos SAT ────────────────────────────────────────────────────────────
@@ -107,6 +108,8 @@ export default function FacturacionPage() {
   const { showToast } = useAppStore()
   const constanciaRef = useRef<HTMLInputElement>(null)
 
+  // Solo se usa para Storage (upload de constancia); las llamadas de datos
+  // pasan por /api/billing que invoca la RPC update_billing_profile en PG.
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -129,34 +132,36 @@ export default function FacturacionPage() {
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState('')
 
-  // ── Cargar datos ───────────────────────────────────────────────────────────
+  // ── Cargar datos via GET /api/billing ──────────────────────────────────────
   useEffect(() => {
     async function load() {
       setLoading(true)
       try {
-        const { data: { session }, error: sessErr } = await supabase.auth.getSession()
-        if (sessErr || !session) { router.replace('/login?redirectTo=/cuenta/facturacion'); return }
+        const res = await fetch('/api/billing', { headers: { Accept: 'application/json' } })
 
-        const { data, error: dbErr } = await supabase
-          .from('app_users')
-          .select('rfc, razon_social, regimen_fiscal, cp_fiscal, uso_cfdi, correo_facturacion, constancia_sat_url, constancia_sat_name')
-          .eq('auth_id', session.user.id)
-          .single()
+        if (res.status === 401) { router.replace('/login?redirectTo=/cuenta/facturacion'); return }
 
-        if (dbErr && dbErr.code !== 'PGRST116') throw dbErr
+        const payload = await res.json().catch(() => null) as
+          | { ok: true;  data: Record<string, string | null> }
+          | { ok: false; error?: string }
+          | null
 
-        if (data) {
-          setForm({
-            rfc:                (data.rfc                || '').toUpperCase(),
-            razon_social:       (data.razon_social       || '').toUpperCase(),
-            regimen_fiscal:     data.regimen_fiscal       || '',
-            cp_fiscal:          data.cp_fiscal            || '',
-            uso_cfdi:           data.uso_cfdi             || '',
-            correo_facturacion: data.correo_facturacion   || '',
-          })
-          setConstanciaUrl(data.constancia_sat_url   || null)
-          setConstanciaName(data.constancia_sat_name || '')
+        if (!res.ok || !payload?.ok) {
+          throw new Error(payload && !payload.ok ? (payload.error ?? 'Error al cargar datos.') : 'Error al cargar datos.')
         }
+
+        const d = payload.data
+        setForm({
+          rfc:                (d.rfc                ?? '').toUpperCase(),
+          razon_social:       (d.razon_social       ?? '').toUpperCase(),
+          regimen_fiscal:     d.regimen_fiscal       ?? '',
+          cp_fiscal:          d.cp_fiscal            ?? '',
+          uso_cfdi:           d.uso_cfdi             ?? '',
+          correo_facturacion: d.correo_facturacion   ?? '',
+        })
+        setConstanciaUrl(d.constancia_sat_url   ?? null)
+        setConstanciaName(d.constancia_sat_name ?? '')
+
       } catch (err) {
         clientLogger.error('Facturacion load error:', err)
         setError(err instanceof Error ? err.message : 'No pudimos cargar tus datos de facturación.')
@@ -165,13 +170,13 @@ export default function FacturacionPage() {
       }
     }
     load()
-  }, [router, supabase])
+  }, [router])
 
   const setField = useCallback((field: keyof typeof form, value: string) => {
     setForm(cur => ({ ...cur, [field]: value }))
   }, [])
 
-  // ── Subir constancia ───────────────────────────────────────────────────────
+  // ── Subir constancia (Storage directo + PATCH /api/billing) ───────────────
   async function handleConstancia(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -189,7 +194,7 @@ export default function FacturacionPage() {
     setConstanciaUpload(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      if (!session) { router.replace('/login?redirectTo=/cuenta/facturacion'); return }
 
       const ext  = file.name.split('.').pop()
       const path = `constancias/${session.user.id}.${ext}`
@@ -203,10 +208,15 @@ export default function FacturacionPage() {
       const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path)
       const publicUrl = urlData.publicUrl + `?t=${Date.now()}`
 
-      await supabase.from('app_users').update({
-        constancia_sat_url:  publicUrl,
-        constancia_sat_name: file.name,
-      }).eq('auth_id', session.user.id)
+      // Persistir via API route → RPC (validación doble en PG)
+      const res = await fetch('/api/billing', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ constancia_sat_url: publicUrl, constancia_sat_name: file.name }),
+      })
+
+      const payload = await res.json().catch(() => null) as { ok: boolean; error?: string } | null
+      if (!res.ok || !payload?.ok) throw new Error(payload?.error ?? 'Error al guardar la constancia.')
 
       setConstanciaUrl(publicUrl)
       setConstanciaName(file.name)
@@ -220,11 +230,12 @@ export default function FacturacionPage() {
     }
   }
 
-  // ── Guardar ────────────────────────────────────────────────────────────────
+  // ── Guardar via PATCH /api/billing → RPC update_billing_profile ───────────
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
+    // Validación optimista en el cliente (mismas reglas que el API route y la RPC)
     if (form.rfc && !isValidRFC(form.rfc)) {
       setError('RFC inválido. Verifica el formato (ej. GARM900101AB3).')
       return
@@ -240,22 +251,25 @@ export default function FacturacionPage() {
 
     setSaving(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.replace('/login?redirectTo=/cuenta/facturacion'); return }
-
-      const { error: updateErr } = await supabase
-        .from('app_users')
-        .update({
+      const res = await fetch('/api/billing', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           rfc:                form.rfc.trim()                || null,
           razon_social:       form.razon_social.trim()       || null,
           regimen_fiscal:     form.regimen_fiscal            || null,
           cp_fiscal:          form.cp_fiscal.trim()          || null,
           uso_cfdi:           form.uso_cfdi                  || null,
           correo_facturacion: form.correo_facturacion.trim() || null,
-        })
-        .eq('auth_id', session.user.id)
+        }),
+      })
 
-      if (updateErr) throw updateErr
+      const payload = await res.json().catch(() => null) as { ok: boolean; error?: string } | null
+
+      if (res.status === 401) { router.replace('/login?redirectTo=/cuenta/facturacion'); return }
+      if (!res.ok || !payload?.ok) {
+        throw new Error(payload?.error ?? 'No pudimos guardar los datos.')
+      }
 
       showToast('Datos de facturación guardados.')
       router.push('/cuenta')
@@ -265,7 +279,7 @@ export default function FacturacionPage() {
     } finally {
       setSaving(false)
     }
-  }, [form, router, showToast, supabase])
+  }, [form, router, showToast])
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {

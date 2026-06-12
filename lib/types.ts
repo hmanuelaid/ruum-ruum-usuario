@@ -28,7 +28,16 @@ export interface Vehicle {
 
 export interface Location {
   address: string
+  // Campos desglosados de la dirección
+  calle?: string
+  numero?: string
+  colonia?: string
+  municipio?: string
+  estado?: string
+  codigoPostal?: string
+  // Otros
   reference?: string
+  collectionNotes?: string   // Notas / indicaciones de recolección
   lat?: number
   lng?: number
 }
@@ -97,6 +106,13 @@ export interface SolicitudDraft {
   specialInstructions?: string
   distanceKm?: number
   priceEstimatedMXN?: number
+  // Alcance del traslado
+  tripScope?: 'local' | 'foraneo'
+  // Ventanas de tiempo
+  collectionWindowStart?: string   // HH:MM
+  collectionWindowEnd?: string     // HH:MM
+  deliveryWindowStart?: string     // HH:MM
+  deliveryWindowEnd?: string       // HH:MM
 }
 
 export interface User {

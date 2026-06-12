@@ -7,6 +7,30 @@ function toLocalDateTimeInputValue(date: Date) {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
 }
 
+// Campo de hora individual con label
+function TimeField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="field-group" style={{ flex: 1 }}>
+      <label className="field-label" style={{ fontSize: 12 }}>{label}</label>
+      <input
+        className="field-input"
+        type="time"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{ fontSize: 14 }}
+      />
+    </div>
+  )
+}
+
 export default function ScheduleStep() {
   const { draft, updateDraft, setStep } = useWizardStore()
   const [error, setError] = useState('')
@@ -20,14 +44,12 @@ export default function ScheduleStep() {
         setError('Selecciona fecha y hora para programar el viaje.')
         return
       }
-
       const selectedTime = new Date(draft.scheduledAt).getTime()
       if (!Number.isFinite(selectedTime) || selectedTime < Date.now() - 5 * 60 * 1000) {
         setError('La fecha programada debe ser futura.')
         return
       }
     }
-
     setError('')
     setStep(4)
   }
@@ -85,42 +107,82 @@ export default function ScheduleStep() {
         </div>
       )}
 
-      {/* Tipo de traslado */}
+      {/* Alcance del traslado */}
       <div className="field-group">
         <label className="field-label">Alcance del traslado</label>
         <div style={{ display: 'flex', gap: 8 }}>
-          {[
-            { label: '🏙️ Local', desc: 'Mismo estado' },
-            { label: '🗺️ Foráneo', desc: 'Otro estado' },
-          ].map(({ label, desc }) => (
-            <button key={label}
-              style={{
-                flex: 1, padding: '12px 8px',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--surface-2)',
-                border: '1px solid var(--border)',
-                cursor: 'pointer', color: 'var(--text)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-              }}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>{label}</span>
-              <span className="muted" style={{ fontSize: 12 }}>{desc}</span>
-            </button>
-          ))}
+          {([
+            { value: 'local'   as const, label: '🏙️ Local',   desc: 'Mismo estado' },
+            { value: 'foraneo' as const, label: '🗺️ Foráneo', desc: 'Otro estado' },
+          ]).map(({ value, label, desc }) => {
+            const selected = draft.tripScope === value
+            return (
+              <button key={value}
+                onClick={() => updateDraft({ tripScope: value })}
+                style={{
+                  flex: 1, padding: '12px 8px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: selected ? 'var(--primary-dim)' : 'var(--surface-2)',
+                  border: `1px solid ${selected ? 'var(--primary)' : 'var(--border)'}`,
+                  cursor: 'pointer', color: 'var(--text)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'background 0.15s, border-color 0.15s',
+                }}>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>{label}</span>
+                <span className="muted" style={{ fontSize: 12 }}>{desc}</span>
+                {selected && (
+                  <span style={{ color: 'var(--primary)', fontSize: 14, marginTop: 2 }}>✓</span>
+                )}
+              </button>
+            )
+          })}
         </div>
       </div>
 
       {/* Ventanas de tiempo */}
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <p style={{ fontWeight: 600, fontSize: 14 }}>Ventanas de tiempo (opcional)</p>
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <p style={{ fontWeight: 600, fontSize: 14 }}>Ventanas de tiempo <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>(opcional)</span></p>
+
+        {/* Ventana de recolección */}
         <div className="field-group">
           <label className="field-label">Ventana de recolección</label>
-          <input className="field-input" placeholder="Ej. Entre 9:00 y 11:00 AM"
-            style={{ fontSize: 13 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <TimeField
+              label="Desde"
+              value={draft.collectionWindowStart ?? ''}
+              onChange={v => updateDraft({ collectionWindowStart: v })}
+            />
+            <span style={{
+              color: 'var(--text-muted)', fontSize: 13, fontWeight: 500,
+              paddingTop: 18, flexShrink: 0,
+            }}>—</span>
+            <TimeField
+              label="Hasta"
+              value={draft.collectionWindowEnd ?? ''}
+              onChange={v => updateDraft({ collectionWindowEnd: v })}
+            />
+          </div>
         </div>
+
+        {/* Ventana de entrega */}
         <div className="field-group">
           <label className="field-label">Ventana de entrega</label>
-          <input className="field-input" placeholder="Ej. Antes de las 6:00 PM"
-            style={{ fontSize: 13 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <TimeField
+              label="Desde"
+              value={draft.deliveryWindowStart ?? ''}
+              onChange={v => updateDraft({ deliveryWindowStart: v })}
+            />
+            <span style={{
+              color: 'var(--text-muted)', fontSize: 13, fontWeight: 500,
+              paddingTop: 18, flexShrink: 0,
+            }}>—</span>
+            <TimeField
+              label="Hasta"
+              value={draft.deliveryWindowEnd ?? ''}
+              onChange={v => updateDraft({ deliveryWindowEnd: v })}
+            />
+          </div>
         </div>
       </div>
 

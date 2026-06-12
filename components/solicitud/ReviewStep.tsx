@@ -176,6 +176,9 @@ export default function ReviewStep() {
             <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Origen</p>
             <p style={{ fontWeight: 600, fontSize: 14 }}>{draft.origin.address}</p>
             {draft.origin.reference && <p className="muted">{draft.origin.reference}</p>}
+            {draft.origin.collectionNotes && (
+              <p className="muted" style={{ fontStyle: 'italic' }}>📋 {draft.origin.collectionNotes}</p>
+            )}
             <p className="muted" style={{ marginTop: 4 }}>
               {draft.originContact.name} · {draft.originContact.phone}
             </p>
@@ -187,6 +190,9 @@ export default function ReviewStep() {
             <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Destino</p>
             <p style={{ fontWeight: 600, fontSize: 14 }}>{draft.destination.address}</p>
             {draft.destination.reference && <p className="muted">{draft.destination.reference}</p>}
+            {draft.destination.collectionNotes && (
+              <p className="muted" style={{ fontStyle: 'italic' }}>📋 {draft.destination.collectionNotes}</p>
+            )}
             <p className="muted" style={{ marginTop: 4 }}>
               {draft.destinationContact.name} · {draft.destinationContact.phone}
             </p>

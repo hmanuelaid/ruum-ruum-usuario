@@ -34,11 +34,28 @@ export type ValidatedRouteInput = {
   specialInstructions?: string
 }
 
+// Campos de dirección desglosada
+type AddressFields = {
+  calle: string
+  numero: string
+  colonia: string
+  municipio: string
+  estado: string
+  codigoPostal: string
+  reference?: string
+  collectionNotes?: string
+}
+
 export type ValidatedTripRequestPayload = ValidatedRouteInput & {
   serviceType: ServiceType
   vehicle: ValidatedVehicleInput
   asap: boolean
   scheduledAt?: string
+  tripScope?: 'local' | 'foraneo'
+  collectionWindowStart?: string
+  collectionWindowEnd?: string
+  deliveryWindowStart?: string
+  deliveryWindowEnd?: string
 }
 
 const SERVICE_TYPES = [
@@ -221,6 +238,49 @@ export function validateVehicleInput(input: unknown): ValidationResult<Validated
   return validationOk(data)
 }
 
+function validateAddressFields(
+  loc: Record<string, unknown>,
+  prefix: string,
+  errors: FieldErrors
+): AddressFields | null {
+  const calle = requiredText(loc.calle, 2, 120)
+  if (!calle) errors[`${prefix}.calle`] = 'Ingresa el nombre de la calle.'
+
+  const numero = requiredText(loc.numero, 1, 20)
+  if (!numero) errors[`${prefix}.numero`] = 'Ingresa el número exterior.'
+
+  const colonia = requiredText(loc.colonia, 2, 80)
+  if (!colonia) errors[`${prefix}.colonia`] = 'Ingresa la colonia o fraccionamiento.'
+
+  const municipio = requiredText(loc.municipio, 2, 80)
+  if (!municipio) errors[`${prefix}.municipio`] = 'Ingresa el municipio o alcaldía.'
+
+  const estado = requiredText(loc.estado, 2, 60)
+  if (!estado) errors[`${prefix}.estado`] = 'Ingresa el estado.'
+
+  const cpRaw = cleanText(loc.codigoPostal)
+  const codigoPostal = /^\d{5}$/.test(cpRaw) ? cpRaw : null
+  if (!codigoPostal) errors[`${prefix}.codigoPostal`] = 'Ingresa un código postal de 5 dígitos.'
+
+  const reference = optionalText(loc.reference, 160)
+  if (reference === null) errors[`${prefix}.reference`] = 'Las referencias son demasiado largas (máx 160 caracteres).'
+
+  const collectionNotes = optionalText(loc.collectionNotes, 500)
+  if (collectionNotes === null) errors[`${prefix}.collectionNotes`] = 'Las notas de recolección no pueden exceder 500 caracteres.'
+
+  if (!calle || !numero || !colonia || !municipio || !estado || !codigoPostal) return null
+
+  return {
+    calle, numero, colonia, municipio, estado, codigoPostal,
+    ...(reference ? { reference } : {}),
+    ...(collectionNotes ? { collectionNotes } : {}),
+  }
+}
+
+function buildAddress(f: AddressFields): string {
+  return `${f.calle} ${f.numero}, ${f.colonia}, ${f.municipio}, ${f.estado}, CP ${f.codigoPostal}`
+}
+
 export function validateRouteInput(input: unknown): ValidationResult<ValidatedRouteInput> {
   const payload = isRecord(input) ? input : {}
   const origin = isRecord(payload.origin) ? payload.origin : {}
@@ -229,31 +289,20 @@ export function validateRouteInput(input: unknown): ValidationResult<ValidatedRo
   const destinationContact = isRecord(payload.destinationContact) ? payload.destinationContact : {}
   const errors: FieldErrors = {}
 
-  const originAddress = normalizeAddress(origin.address)
-  if (!originAddress) errors['origin.address'] = 'Ingresa una direccion de recogida valida.'
-
-  const destinationAddress = normalizeAddress(destination.address)
-  if (!destinationAddress) errors['destination.address'] = 'Ingresa una direccion de entrega valida.'
-
-  const originReference = optionalText(origin.reference, 160)
-  if (originReference === null) errors['origin.reference'] = 'La referencia de origen es demasiado larga.'
-
-  const destinationReference = optionalText(destination.reference, 160)
-  if (destinationReference === null) {
-    errors['destination.reference'] = 'La referencia de destino es demasiado larga.'
-  }
+  const originFields = validateAddressFields(origin, 'origin', errors)
+  const destinationFields = validateAddressFields(destination, 'destination', errors)
 
   const originName = normalizeContactName(originContact.name)
   if (!originName) errors['originContact.name'] = 'Ingresa el nombre de quien entrega.'
 
   const originPhone = normalizePhone(originContact.phone)
-  if (!originPhone) errors['originContact.phone'] = 'Ingresa un telefono de origen valido.'
+  if (!originPhone) errors['originContact.phone'] = 'Ingresa un teléfono de origen válido.'
 
   const destinationName = normalizeContactName(destinationContact.name)
   if (!destinationName) errors['destinationContact.name'] = 'Ingresa el nombre de quien recibe.'
 
   const destinationPhone = normalizePhone(destinationContact.phone)
-  if (!destinationPhone) errors['destinationContact.phone'] = 'Ingresa un telefono de destino valido.'
+  if (!destinationPhone) errors['destinationContact.phone'] = 'Ingresa un teléfono de destino válido.'
 
   const specialInstructions = optionalText(payload.specialInstructions, 500)
   if (specialInstructions === null) {
@@ -265,14 +314,32 @@ export function validateRouteInput(input: unknown): ValidationResult<ValidatedRo
   }
 
   const data: ValidatedRouteInput = {
-    origin: { address: originAddress! },
-    destination: { address: destinationAddress! },
+    origin: {
+      address: buildAddress(originFields!),
+      calle: originFields!.calle,
+      numero: originFields!.numero,
+      colonia: originFields!.colonia,
+      municipio: originFields!.municipio,
+      estado: originFields!.estado,
+      codigoPostal: originFields!.codigoPostal,
+      ...(originFields!.reference ? { reference: originFields!.reference } : {}),
+      ...(originFields!.collectionNotes ? { collectionNotes: originFields!.collectionNotes } : {}),
+    },
+    destination: {
+      address: buildAddress(destinationFields!),
+      calle: destinationFields!.calle,
+      numero: destinationFields!.numero,
+      colonia: destinationFields!.colonia,
+      municipio: destinationFields!.municipio,
+      estado: destinationFields!.estado,
+      codigoPostal: destinationFields!.codigoPostal,
+      ...(destinationFields!.reference ? { reference: destinationFields!.reference } : {}),
+      ...(destinationFields!.collectionNotes ? { collectionNotes: destinationFields!.collectionNotes } : {}),
+    },
     originContact: { name: originName!, phone: originPhone! },
     destinationContact: { name: destinationName!, phone: destinationPhone! },
   }
 
-  if (originReference) data.origin.reference = originReference
-  if (destinationReference) data.destination.reference = destinationReference
   if (specialInstructions) data.specialInstructions = specialInstructions
 
   return validationOk(data)
@@ -336,6 +403,22 @@ export function validateTripRequestPayload(input: unknown): ValidationResult<Val
     return validationError(errors)
   }
 
+  // Alcance del traslado
+  const tripScope = isAllowed(payload.tripScope, ['local', 'foraneo'] as const)
+    ? payload.tripScope
+    : undefined
+
+  // Ventanas de tiempo — formato HH:MM opcional
+  const TIME_RE = /^\d{2}:\d{2}$/
+  function optionalTime(value: unknown): string | undefined {
+    const t = cleanText(value)
+    return t && TIME_RE.test(t) ? t : undefined
+  }
+  const collectionWindowStart = optionalTime(payload.collectionWindowStart)
+  const collectionWindowEnd   = optionalTime(payload.collectionWindowEnd)
+  const deliveryWindowStart   = optionalTime(payload.deliveryWindowStart)
+  const deliveryWindowEnd     = optionalTime(payload.deliveryWindowEnd)
+
   const data: ValidatedTripRequestPayload = {
     ...routeResult.data,
     serviceType,
@@ -343,7 +426,12 @@ export function validateTripRequestPayload(input: unknown): ValidationResult<Val
     asap,
   }
 
-  if (scheduledAt) data.scheduledAt = scheduledAt
+  if (scheduledAt)            data.scheduledAt            = scheduledAt
+  if (tripScope)              data.tripScope              = tripScope
+  if (collectionWindowStart)  data.collectionWindowStart  = collectionWindowStart
+  if (collectionWindowEnd)    data.collectionWindowEnd    = collectionWindowEnd
+  if (deliveryWindowStart)    data.deliveryWindowStart    = deliveryWindowStart
+  if (deliveryWindowEnd)      data.deliveryWindowEnd      = deliveryWindowEnd
 
   return validationOk(data)
 }

@@ -229,8 +229,8 @@ export default function CuentaPage() {
             />
             <SettingsRow
               label="Facturación"
-              sub="Consulta y administra tus pagos"
-              onClick={() => router.push('/cuenta/pagos')}
+              sub="RFC, razón social y datos fiscales"
+              onClick={() => router.push('/cuenta/facturacion')}
             />
           </SectionCard>
 

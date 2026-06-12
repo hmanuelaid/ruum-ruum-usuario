@@ -225,15 +225,17 @@ export default function RegistroPage() {
               <label className="field-label">Nombre(s)</label>
               <input className="field-input" placeholder="JUAN CARLOS"
                 value={form.firstName}
-                onChange={e => update('firstName', e.target.value.replace(/\b\w/g, c => c.toUpperCase()))}
-                autoCapitalize="words"
+                onChange={e => update('firstName', e.target.value.toUpperCase())}
+                autoCapitalize="characters"
+                style={{ textTransform: 'uppercase' }}
                 required />
 
               <label className="field-label">Apellido(s)</label>
               <input className="field-input" placeholder="GARCIA LOPEZ"
                 value={form.lastName}
-                onChange={e => update('lastName', e.target.value.replace(/\b\w/g, c => c.toUpperCase()))}
-                autoCapitalize="words"
+                onChange={e => update('lastName', e.target.value.toUpperCase())}
+                autoCapitalize="characters"
+                style={{ textTransform: 'uppercase' }}
                 required />
 
               <label className="field-label">Teléfono</label>

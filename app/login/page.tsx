@@ -235,7 +235,7 @@ export default function LoginPage() {
               className="field-input"
               placeholder="••••••••"
               value={password}
-              onChange={e => setPassword(e.target.value.toUpperCase())}
+              onChange={e => setPassword(e.target.value)}
               autoComplete="current-password"
               required
               style={{ paddingRight: '2.8rem' }}
@@ -277,7 +277,7 @@ export default function LoginPage() {
           ¿Olvidaste tu contraseña?
         </button>
 
-        <button className="btn-ghost" onClick={() => router.push('/onboarding')}>
+        <button className="btn-ghost" onClick={() => router.push('/onboarding/registro')}>
           ¿Usuario nuevo? Regístrate
         </button>
       </div>

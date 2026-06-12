@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { clientLogger } from '@/lib/clientLogger'
 import { createBrowserClient } from '@supabase/ssr'
@@ -25,27 +25,52 @@ function FieldGroup({ label, hint, id, children }: { label: string; hint?: strin
   )
 }
 
-const validatePhone = (phone: string): boolean => {
-  if (!phone) return true
-  return /^\+?[1-9]\d{1,14}$/.test(phone)
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{
+      fontSize: 13, fontWeight: 700, color: 'var(--text)',
+      margin: '8px 0 4px', paddingBottom: 8,
+      borderBottom: '1px solid var(--border)',
+      textTransform: 'uppercase', letterSpacing: '0.06em',
+    }}>
+      {children}
+    </p>
+  )
 }
+
+const toUpper = (v: string) => v.toUpperCase()
 
 export default function PerfilPage() {
   const router = useRouter()
   const { user, setUser } = useAuthStore()
   const { showToast } = useAppStore()
-  
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
   const [form, setForm] = useState({
-    name: '', phone: '', country: '', state: '', address: '',
+    // Datos personales
+    nombres: '',
+    apellidos: '',
+    curp: '',
+    phone: '',
+    // Domicilio
+    calle: '',
+    numero: '',
+    colonia: '',
+    municipio: '',
+    estado: '',
+    codigoPostal: '',
   })
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [userEmail, setUserEmail] = useState('')
 
   useEffect(() => {
     async function loadProfile() {
@@ -53,11 +78,13 @@ export default function PerfilPage() {
       setError('')
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-        
+
         if (sessionError || !session) {
           router.replace('/login?redirectTo=/cuenta/perfil')
           return
         }
+
+        setUserEmail(session.user.email || '')
 
         const { data, error: profileError } = await supabase
           .from('app_users')
@@ -75,9 +102,6 @@ export default function PerfilPage() {
               name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuario',
               email: session.user.email,
               phone: session.user.user_metadata?.phone || '',
-              country: null,
-              state: null,
-              address: null,
             })
             .select('*')
             .single()
@@ -89,22 +113,46 @@ export default function PerfilPage() {
         }
 
         if (profile) {
+          // Intentar separar nombre guardado en nombre/apellido si se guardó junto
+          const fullName: string = profile.name || ''
+          const parts = fullName.split(' ')
+          const storedNombres: string = profile.nombres || (parts.length > 0 ? parts[0] : '')
+          const storedApellidos: string = profile.apellidos || (parts.length > 1 ? parts.slice(1).join(' ') : '')
+
+          // Parsear address en campos individuales
+          const address: string = profile.address || ''
+          let calle = '', numero = '', colonia = '', municipio = '', estado = '', codigoPostal = ''
+          if (profile.calle !== undefined) {
+            calle = profile.calle || ''
+            numero = profile.numero || ''
+            colonia = profile.colonia || ''
+            municipio = profile.municipio || ''
+            estado = profile.state || profile.estado || ''
+            codigoPostal = profile.codigo_postal || ''
+          } else if (address) {
+            // Compatibilidad con el campo address antiguo
+            calle = address
+          }
+
+          setAvatarUrl(profile.avatar_url || null)
           setForm({
-            name: profile.name || '',
+            nombres: storedNombres.toUpperCase(),
+            apellidos: storedApellidos.toUpperCase(),
+            curp: (profile.curp || '').toUpperCase(),
             phone: profile.phone || '',
-            country: profile.country || '',
-            state: profile.state || '',
-            address: profile.address || '',
+            calle: calle.toUpperCase(),
+            numero: numero.toUpperCase(),
+            colonia: colonia.toUpperCase(),
+            municipio: municipio.toUpperCase(),
+            estado: estado.toUpperCase(),
+            codigoPostal: codigoPostal.toUpperCase(),
           })
-          
+
           setUser({
             id: profile.id,
             name: profile.name,
             email: profile.email,
             phone: profile.phone || '',
-            country: profile.country || '',
-            state: profile.state || '',
-            address: profile.address || '',
           } as User)
         }
       } catch (err) {
@@ -122,17 +170,57 @@ export default function PerfilPage() {
     setForm(cur => ({ ...cur, [field]: value }))
   }, [])
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!form.name.trim()) { setError('El nombre es obligatorio.'); return }
-    if (form.phone && !validatePhone(form.phone)) {
-      setError('Formato de teléfono inválido. Usa +525500000000')
+  // ── Avatar upload ──────────────────────────────────────────────────────────
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Solo se permiten imágenes (JPG, PNG, WEBP).')
       return
     }
-    
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('La imagen no debe superar 5 MB.')
+      return
+    }
+
+    setAvatarUploading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      const ext = file.name.split('.').pop()
+      const path = `avatars/${session.user.id}.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(path, file, { upsert: true, contentType: file.type })
+
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path)
+      const publicUrl = urlData.publicUrl + `?t=${Date.now()}`
+
+      await supabase.from('app_users').update({ avatar_url: publicUrl }).eq('auth_id', session.user.id)
+      setAvatarUrl(publicUrl)
+      showToast('Foto actualizada.')
+    } catch (err) {
+      clientLogger.error('Avatar upload error:', err)
+      showToast('No pudimos subir la foto. Intenta de nuevo.')
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.nombres.trim()) { setError('El nombre es obligatorio.'); return }
+    if (!form.apellidos.trim()) { setError('Los apellidos son obligatorios.'); return }
+
     setSaving(true)
     setError('')
-    
+
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
@@ -140,28 +228,30 @@ export default function PerfilPage() {
         return
       }
 
+      const fullName = `${form.nombres.trim()} ${form.apellidos.trim()}`.replace(/\s+/g, ' ')
+
       const { error: updateError } = await supabase
         .from('app_users')
         .update({
-          name: form.name.trim(),
+          name: fullName,
+          nombres: form.nombres.trim(),
+          apellidos: form.apellidos.trim(),
+          curp: form.curp.trim() || null,
           phone: form.phone.trim() || null,
-          country: form.country.trim() || null,
-          state: form.state.trim() || null,
-          address: form.address.trim() || null,
+          calle: form.calle.trim() || null,
+          numero: form.numero.trim() || null,
+          colonia: form.colonia.trim() || null,
+          municipio: form.municipio.trim() || null,
+          state: form.estado.trim() || null,
+          codigo_postal: form.codigoPostal.trim() || null,
+          address: [form.calle, form.numero, form.colonia, form.municipio, form.estado, form.codigoPostal]
+            .filter(Boolean).join(', ') || null,
         })
         .eq('auth_id', session.user.id)
 
       if (updateError) throw updateError
 
-      setUser({
-        ...user!,
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        country: form.country.trim(),
-        state: form.state.trim(),
-        address: form.address.trim(),
-      } as User)
-
+      setUser({ ...user!, name: fullName, phone: form.phone.trim() } as User)
       showToast('Perfil actualizado correctamente.')
       router.push('/cuenta')
     } catch (err) {
@@ -183,8 +273,11 @@ export default function PerfilPage() {
     )
   }
 
+  const initials = [form.nombres[0], form.apellidos[0]].filter(Boolean).join('') || 'U'
+
   return (
     <>
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
         <button
           type="button"
@@ -217,77 +310,250 @@ export default function PerfilPage() {
         borderRadius: 'var(--radius)', padding: '20px 16px',
       }}>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <FieldGroup label="Nombre completo *" id="name">
+
+          {/* ── Tarjeta de foto ── */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            gap: 12, padding: '20px 16px',
+            background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border)',
+          }}>
+            {/* Avatar */}
+            <div style={{ position: 'relative' }}>
+              <div style={{
+                width: 88, height: 88, borderRadius: '50%',
+                overflow: 'hidden', background: 'var(--primary-dim)',
+                border: '3px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Foto de perfil"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--primary)' }}>
+                    {initials}
+                  </span>
+                )}
+                {avatarUploading && (
+                  <div style={{
+                    position: 'absolute', inset: 0, background: 'rgba(0,0,0,.5)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: '50%',
+                  }}>
+                    <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>…</span>
+                  </div>
+                )}
+              </div>
+              {/* Badge cámara */}
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarUploading}
+                aria-label="Cambiar foto"
+                style={{
+                  position: 'absolute', bottom: 0, right: 0,
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: 'var(--primary)', border: '2px solid var(--surface)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+              </button>
+            </div>
+
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontWeight: 700, fontSize: 14, margin: 0, color: 'var(--text)' }}>
+                {form.nombres || 'Tu nombre'} {form.apellidos}
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                {userEmail}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={avatarUploading}
+              style={{
+                fontSize: 12, fontWeight: 600,
+                color: 'var(--primary)', background: 'var(--primary-dim)',
+                border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)',
+                padding: '6px 16px', cursor: 'pointer',
+              }}
+            >
+              {avatarUploading ? 'Subiendo…' : avatarUrl ? 'Cambiar foto' : 'Subir foto'}
+            </button>
             <input
-              id="name"
-              name="name"
+              ref={avatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+              onChange={handleAvatarChange}
+            />
+          </div>
+
+          {/* ── Sección: Datos de acceso ── */}
+          <SectionTitle>Datos de acceso</SectionTitle>
+
+          <FieldGroup label="Correo electrónico" hint="El correo no se puede modificar desde aquí." id="email">
+            <input
+              id="email"
+              name="email"
               className="field-input"
-              value={form.name}
-              onChange={e => setField('name', e.target.value)}
-              placeholder="Tu nombre"
+              value={userEmail}
+              disabled
+              style={{ opacity: 0.5, cursor: 'not-allowed' }}
+            />
+          </FieldGroup>
+
+          {/* ── Sección: Datos personales ── */}
+          <SectionTitle>Datos personales</SectionTitle>
+
+          <FieldGroup label="Nombre(s) *" id="nombres">
+            <input
+              id="nombres"
+              name="nombres"
+              className="field-input"
+              value={form.nombres}
+              onChange={e => setField('nombres', toUpper(e.target.value))}
+              placeholder="JUAN CARLOS"
+              autoCapitalize="characters"
+              style={{ textTransform: 'uppercase' }}
               required
             />
           </FieldGroup>
 
-          <FieldGroup label="Teléfono" hint="Formato internacional: +52 seguido del número" id="phone">
+          <FieldGroup label="Apellido(s) *" id="apellidos">
+            <input
+              id="apellidos"
+              name="apellidos"
+              className="field-input"
+              value={form.apellidos}
+              onChange={e => setField('apellidos', toUpper(e.target.value))}
+              placeholder="GARCÍA LÓPEZ"
+              autoCapitalize="characters"
+              style={{ textTransform: 'uppercase' }}
+              required
+            />
+          </FieldGroup>
+
+          <FieldGroup label="CURP" id="curp">
+            <input
+              id="curp"
+              name="curp"
+              className="field-input"
+              value={form.curp}
+              onChange={e => setField('curp', toUpper(e.target.value))}
+              placeholder="GARL900101HMCRZN08"
+              maxLength={18}
+              autoCapitalize="characters"
+              style={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'monospace' }}
+            />
+          </FieldGroup>
+
+          <FieldGroup label="Teléfono" hint="10 dígitos, sin código de país" id="phone">
             <input
               id="phone"
               name="phone"
               className="field-input"
               type="tel"
+              inputMode="numeric"
               value={form.phone}
-              onChange={e => setField('phone', e.target.value)}
-              placeholder="+525500000000"
+              onChange={e => setField('phone', e.target.value.replace(/[^\d\s-]/g, ''))}
+              placeholder="55 0000 0000"
             />
           </FieldGroup>
 
-          <FieldGroup label="País" id="country">
+          {/* ── Sección: Domicilio ── */}
+          <SectionTitle>Domicilio</SectionTitle>
+
+          <FieldGroup label="Calle" id="calle">
             <input
-              id="country"
-              name="country"
+              id="calle"
+              name="calle"
               className="field-input"
-              value={form.country}
-              onChange={e => setField('country', e.target.value)}
-              placeholder="Tu país"
+              value={form.calle}
+              onChange={e => setField('calle', toUpper(e.target.value))}
+              placeholder="AV. INSURGENTES SUR"
+              autoCapitalize="characters"
+              style={{ textTransform: 'uppercase' }}
             />
           </FieldGroup>
 
-          <FieldGroup label="Estado / Provincia" id="state">
+          <FieldGroup label="Número" id="numero">
             <input
-              id="state"
-              name="state"
+              id="numero"
+              name="numero"
               className="field-input"
-              value={form.state}
-              onChange={e => setField('state', e.target.value)}
-              placeholder="Tu estado o provincia"
+              value={form.numero}
+              onChange={e => setField('numero', toUpper(e.target.value))}
+              placeholder="123 INT 4B"
+              autoCapitalize="characters"
+              style={{ textTransform: 'uppercase' }}
             />
           </FieldGroup>
 
-          <FieldGroup label="Dirección" id="address">
-            <textarea
-              id="address"
-              name="address"
+          <FieldGroup label="Colonia" id="colonia">
+            <input
+              id="colonia"
+              name="colonia"
               className="field-input"
-              value={form.address}
-              onChange={e => setField('address', e.target.value)}
-              placeholder="Tu dirección completa"
-              rows={3}
-              style={{ resize: 'vertical', minHeight: 80, fontFamily: 'inherit' }}
+              value={form.colonia}
+              onChange={e => setField('colonia', toUpper(e.target.value))}
+              placeholder="DEL VALLE"
+              autoCapitalize="characters"
+              style={{ textTransform: 'uppercase' }}
             />
           </FieldGroup>
 
-          {user?.email && (
-            <FieldGroup label="Correo electrónico" hint="El correo no se puede modificar desde aquí." id="email">
-              <input
-                id="email"
-                name="email"
-                className="field-input"
-                value={user.email}
-                disabled
-                style={{ opacity: 0.5, cursor: 'not-allowed' }}
-              />
-            </FieldGroup>
-          )}
+          <FieldGroup label="Municipio / Alcaldía" id="municipio">
+            <input
+              id="municipio"
+              name="municipio"
+              className="field-input"
+              value={form.municipio}
+              onChange={e => setField('municipio', toUpper(e.target.value))}
+              placeholder="BENITO JUÁREZ"
+              autoCapitalize="characters"
+              style={{ textTransform: 'uppercase' }}
+            />
+          </FieldGroup>
+
+          <FieldGroup label="Estado" id="estado">
+            <input
+              id="estado"
+              name="estado"
+              className="field-input"
+              value={form.estado}
+              onChange={e => setField('estado', toUpper(e.target.value))}
+              placeholder="CIUDAD DE MÉXICO"
+              autoCapitalize="characters"
+              style={{ textTransform: 'uppercase' }}
+            />
+          </FieldGroup>
+
+          <FieldGroup label="Código Postal" id="codigoPostal">
+            <input
+              id="codigoPostal"
+              name="codigoPostal"
+              className="field-input"
+              value={form.codigoPostal}
+              onChange={e => setField('codigoPostal', e.target.value.replace(/[^\dA-Za-z]/g, '').toUpperCase())}
+              placeholder="03100"
+              inputMode="numeric"
+              maxLength={10}
+              style={{ textTransform: 'uppercase' }}
+            />
+          </FieldGroup>
 
           {error && (
             <p style={{

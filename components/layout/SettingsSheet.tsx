@@ -18,6 +18,7 @@ const translations = {
     notificaciones: 'Notificaciones',
     idioma: 'Idioma',
     legal: 'Legal',
+    documentosLegales: 'Documentos legales',
     terminosCondiciones: 'Términos y condiciones',
     avisoPrivacidad: 'Aviso de privacidad',
     cerrandoSesion: 'Cerrando sesión',
@@ -36,6 +37,7 @@ const translations = {
     notificaciones: 'Notifications',
     idioma: 'Language',
     legal: 'Legal',
+    documentosLegales: 'Legal documents',
     terminosCondiciones: 'Terms & Conditions',
     avisoPrivacidad: 'Privacy notice',
     cerrandoSesion: 'Signing out',
@@ -189,6 +191,7 @@ export default function SettingsSheet() {
         {/* Legal */}
         <div className="settings-group">
           <h3>{t('legal')}</h3>
+          <button className="settings-row" onClick={() => goTo('/legal')}>{t('documentosLegales')} <span>›</span></button>
           <button className="settings-row" onClick={() => goTo('/terminos')}>{t('terminosCondiciones')} <span>›</span></button>
           <button className="settings-row" onClick={() => goTo('/privacidad')}>{t('avisoPrivacidad')} <span>›</span></button>
         </div>

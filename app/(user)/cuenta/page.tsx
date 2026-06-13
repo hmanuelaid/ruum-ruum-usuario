@@ -254,6 +254,11 @@ export default function CuentaPage() {
 
           <SectionCard title="Legal">
             <SettingsRow
+              label="Documentos legales"
+              sub="Términos, privacidad, cookies y consentimientos"
+              onClick={() => router.push('/legal')}
+            />
+            <SettingsRow
               label="Términos y condiciones"
               sub="Consulta las reglas del servicio"
               onClick={() => router.push('/terminos')}

@@ -134,7 +134,22 @@ export default function PerfilPage() {
             calle = address
           }
 
-          setAvatarUrl(profile.avatar_url || null)
+          setAvatarUrl(null)
+          if (profile.avatar_url) {
+            if (/^https?:\/\//i.test(profile.avatar_url)) {
+              setAvatarUrl(profile.avatar_url)
+            } else {
+              const avatarRes = await fetch('/api/profile/avatar', { headers: { Accept: 'application/json' } })
+              const avatarPayload = await avatarRes.json().catch(() => null) as
+                | { ok: true; data: { avatar_url: string | null } }
+                | { ok: false; error?: string }
+                | null
+
+              if (avatarRes.ok && avatarPayload?.ok) {
+                setAvatarUrl(avatarPayload.data.avatar_url)
+              }
+            }
+          }
           setForm({
             nombres: storedNombres.toUpperCase(),
             apellidos: storedApellidos.toUpperCase(),
@@ -186,29 +201,36 @@ export default function PerfilPage() {
 
     setAvatarUploading(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      const formData = new FormData()
+      formData.append('file', file)
 
-      const ext = file.name.split('.').pop()
-      const path = `avatars/${session.user.id}.${ext}`
+      const res = await fetch('/api/profile/avatar', {
+        method: 'POST',
+        body: formData,
+      })
 
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(path, file, { upsert: true, contentType: file.type })
+      if (res.status === 401) {
+        router.replace('/login?redirectTo=/cuenta/perfil')
+        return
+      }
 
-      if (uploadError) throw uploadError
+      const payload = await res.json().catch(() => null) as
+        | { ok: true; data: { avatar_url: string } }
+        | { ok: false; error?: string }
+        | null
 
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path)
-      const publicUrl = urlData.publicUrl + `?t=${Date.now()}`
+      if (!res.ok || !payload?.ok) {
+        throw new Error(payload && !payload.ok ? (payload.error ?? 'No pudimos subir la foto.') : 'No pudimos subir la foto.')
+      }
 
-      await supabase.from('app_users').update({ avatar_url: publicUrl }).eq('auth_id', session.user.id)
-      setAvatarUrl(publicUrl)
+      setAvatarUrl(payload.data.avatar_url)
       showToast('Foto actualizada.')
     } catch (err) {
       clientLogger.error('Avatar upload error:', err)
-      showToast('No pudimos subir la foto. Intenta de nuevo.')
+      showToast(err instanceof Error ? err.message : 'No pudimos subir la foto. Intenta de nuevo.')
     } finally {
       setAvatarUploading(false)
+      if (e.target) e.target.value = ''
     }
   }
 

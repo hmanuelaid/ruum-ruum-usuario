@@ -74,6 +74,25 @@ export const useWizardStore = create<WizardState>()(
   )
 )
 
+// ── Preferences ─────────────────────────────────────────────────────────────
+interface PreferencesState {
+  language: 'es' | 'en'
+  setLanguage: (language: 'es' | 'en') => void
+}
+
+export const usePrefsStore = create<PreferencesState>()(
+  persist(
+    (set) => ({
+      language: 'es',
+      setLanguage: (language) => set({ language }),
+    }),
+    {
+      name: 'ruum-prefs',
+      storage: createJSONStorage(() => localStorage),
+    }
+  )
+)
+
 // ── App global ────────────────────────────────────────────────────────────────
 interface AppState {
   activeTrip: Trip | null

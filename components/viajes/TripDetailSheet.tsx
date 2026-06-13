@@ -30,7 +30,7 @@ export default function TripDetailSheet() {
     <div
       className={`sheet-backdrop${isOpen ? ' open' : ''}`}
       onClick={(e) => { if (e.target === e.currentTarget) setActiveTrip(null) }}
-      aria-hidden={!isOpen}
+      inert={!isOpen}
     >
       <aside className="sheet" role="dialog" aria-modal="true"
         style={{ gap: 20, paddingBottom: 40 }}>

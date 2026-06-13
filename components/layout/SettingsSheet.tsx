@@ -39,7 +39,7 @@ export default function SettingsSheet() {
     <div
       className={`sheet-backdrop${settingsOpen ? ' open' : ''}`}
       onClick={(e) => { if (e.target === e.currentTarget) setSettingsOpen(false) }}
-      aria-hidden={!settingsOpen}
+      inert={!settingsOpen}
     >
       <aside className="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
         <div className="sheet-handle" />

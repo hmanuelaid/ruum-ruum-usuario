@@ -11,6 +11,15 @@ export type ServiceType =
   | 'personal' | 'empresarial' | 'agencia' | 'lote'
   | 'flotilla' | 'entrega_cliente' | 'recuperacion' | 'especial'
 
+// Rango de valor declarado del vehículo (usado para calcular tarifa y seguro).
+// Rangos en lugar de valor libre para reducir el incentivo a subdeclarar
+// y evitar disputas por valuación exacta.
+export type VehicleValueRange =
+  | 'hasta_200k'   // Hasta $200,000
+  | '200k_500k'    // $200,000 – $500,000
+  | '500k_1m'      // $500,000 – $1,000,000
+  | 'mas_1m'       // Más de $1,000,000
+
 export interface Vehicle {
   id: string
   alias: string
@@ -24,6 +33,8 @@ export interface Vehicle {
   transmission: TransmissionType
   condition: string
   photos?: string[]
+  // Rango de valor declarado — opcional para compatibilidad con vehículos guardados
+  valueRange?: VehicleValueRange
 }
 
 export interface Location {
@@ -124,8 +135,8 @@ export interface User {
   rfc?: string
   razonSocial?: string
   country?: string | null
-state?: string | null
-address?: string | null
+  state?: string | null
+  address?: string | null
 }
 
 export interface ApiResponse<T> {

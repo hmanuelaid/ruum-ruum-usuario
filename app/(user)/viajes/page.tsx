@@ -4,22 +4,9 @@ import { useAppStore, useAuthStore } from '@/lib/store'
 import { Chip } from '@/components/ui/Chip'
 import { createClient } from '@/lib/supabase'
 import type { Trip } from '@/lib/types'
+import { STATUS_LABELS, ACTIVE_STATUSES } from '@/lib/tripStatus'
 
 type Tab = 'Activos' | 'Programados' | 'Finalizados' | 'Cancelados'
-
-const STATUS_LABELS: Record<string, string> = {
-  solicitud_recibida: 'Solicitud recibida', pendiente_revision: 'En revisión',
-  pendiente_asignacion: 'Sin conductor', conductor_asignado: 'Conductor asignado',
-  conductor_en_camino: 'En camino', recoleccion_proceso: 'Recolección',
-  evidencia_inicial_pendiente: 'Ev. inicial', traslado_curso: 'En curso',
-  entrega_proceso: 'Entrega', evidencia_final_pendiente: 'Ev. final',
-  finalizado: 'Finalizado', cancelado: 'Cancelado', incidente: 'Incidente',
-}
-
-const ACTIVE = ['solicitud_recibida','pendiente_revision','pendiente_asignacion',
-  'conductor_asignado','conductor_en_camino','recoleccion_proceso',
-  'evidencia_inicial_pendiente','traslado_curso','entrega_proceso',
-  'evidencia_final_pendiente','incidente']
 
 interface UserTrip {
   id: string
@@ -72,8 +59,8 @@ export default function ViajesPage() {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
 
-      if (tab === 'Activos')     query = query.in('status', ACTIVE)
-      if (tab === 'Programados') query = query.in('status', ACTIVE).not('scheduled_at', 'is', null)
+      if (tab === 'Activos')     query = query.in('status', ACTIVE_STATUSES)
+      if (tab === 'Programados') query = query.in('status', ACTIVE_STATUSES).not('scheduled_at', 'is', null)
       if (tab === 'Finalizados') query = query.eq('status', 'finalizado')
       if (tab === 'Cancelados')  query = query.eq('status', 'cancelado')
 
@@ -157,7 +144,7 @@ export default function ViajesPage() {
   return (
     <>
       <div className="segmented">
-        {(['Activos','Programados','Finalizados','Cancelados'] as Tab[]).map(t => (
+        {(['Activos', 'Programados', 'Finalizados', 'Cancelados'] as Tab[]).map(t => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>
         ))}
       </div>

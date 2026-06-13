@@ -1,6 +1,7 @@
 // ─── lib/store.ts ─────────────────────────────────────────────────────────────
 'use client'
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { Trip, SolicitudDraft, User } from './types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -23,7 +24,9 @@ export const useAuthStore = create<AuthState>()((set) => ({
 }))
 
 // ── Wizard de solicitud ───────────────────────────────────────────────────────
-const EMPTY_DRAFT: SolicitudDraft = {
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000 // 24 horas
+
+const EMPTY_DRAFT: SolicitudDraft & { savedAt?: number } = {
   step: 1,
   vehicle: {},
   origin: {},
@@ -34,18 +37,42 @@ const EMPTY_DRAFT: SolicitudDraft = {
 }
 
 interface WizardState {
-  draft: SolicitudDraft
+  draft: SolicitudDraft & { savedAt?: number }
+  // true una vez que Zustand termina de rehidratar desde sessionStorage.
+  // Úsalo en componentes para evitar renders en falso con estado vacío.
+  _hasHydrated: boolean
   setStep: (step: number) => void
   updateDraft: (partial: Partial<SolicitudDraft>) => void
   resetDraft: () => void
+  checkDraftExpiry: () => void
 }
 
-export const useWizardStore = create<WizardState>()((set) => ({
-  draft: EMPTY_DRAFT,
-  setStep: (step) => set((s) => ({ draft: { ...s.draft, step } })),
-  updateDraft: (partial) => set((s) => ({ draft: { ...s.draft, ...partial } })),
-  resetDraft: () => set({ draft: EMPTY_DRAFT }),
-}))
+export const useWizardStore = create<WizardState>()(
+  persist(
+    (set, get) => ({
+      draft: EMPTY_DRAFT,
+      _hasHydrated: false,
+      setStep: (step) =>
+        set((s) => ({ draft: { ...s.draft, step, savedAt: Date.now() } })),
+      updateDraft: (partial) =>
+        set((s) => ({ draft: { ...s.draft, ...partial, savedAt: Date.now() } })),
+      resetDraft: () => set({ draft: EMPTY_DRAFT }),
+      checkDraftExpiry: () => {
+        const { draft, resetDraft } = get()
+        if (draft.savedAt && Date.now() - draft.savedAt > DRAFT_TTL_MS) {
+          resetDraft()
+        }
+      },
+    }),
+    {
+      name: 'ruum-solicitud-draft',
+      storage: createJSONStorage(() => sessionStorage),
+      onRehydrateStorage: () => (state) => {
+        if (state) state._hasHydrated = true
+      },
+    }
+  )
+)
 
 // ── App global ────────────────────────────────────────────────────────────────
 interface AppState {

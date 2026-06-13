@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useWizardStore } from '@/lib/store'
-import type { Vehicle, VehicleType, TransmissionType } from '@/lib/types'
+import type { Vehicle, VehicleType, TransmissionType, VehicleValueRange } from '@/lib/types'
 import {
   normalizePlates,
   normalizeVin,
@@ -10,12 +10,23 @@ import {
 } from '@/lib/validation/tripRequest'
 
 const VEHICLE_TYPES: { value: VehicleType; label: string; emoji: string }[] = [
-  { value: 'sedan',  label: 'Sedán',    emoji: '🚗' },
-  { value: 'suv',    label: 'SUV',      emoji: '🚙' },
-  { value: 'pickup', label: 'Pickup',   emoji: '🛻' },
-  { value: 'van',    label: 'Van',      emoji: '🚐' },
-  { value: 'moto',   label: 'Moto',     emoji: '🏍️' },
-  { value: 'otro',   label: 'Otro',     emoji: '🚘' },
+  { value: 'sedan',  label: 'Sedán',  emoji: '🚗' },
+  { value: 'suv',    label: 'SUV',    emoji: '🚙' },
+  { value: 'pickup', label: 'Pickup', emoji: '🛻' },
+  { value: 'van',    label: 'Van',    emoji: '🚐' },
+  { value: 'moto',   label: 'Moto',   emoji: '🏍️' },
+  { value: 'otro',   label: 'Otro',   emoji: '🚘' },
+]
+
+// Rangos de valor declarado del vehículo.
+// Usar rangos en lugar de valor libre reduce el incentivo a subdeclarar
+// y evita disputas de valuación exacta. El multiplicador de precio se
+// aplica en lib/pricing.ts a través de VEHICLE_VALUE_MULTIPLIERS.
+const VALUE_RANGES: { value: VehicleValueRange; label: string; sublabel: string }[] = [
+  { value: 'hasta_200k', label: 'Hasta $200,000',       sublabel: 'Económico' },
+  { value: '200k_500k',  label: '$200,000 – $500,000',  sublabel: 'Compacto / mediano' },
+  { value: '500k_1m',    label: '$500,000 – $1,000,000',sublabel: 'Premium' },
+  { value: 'mas_1m',     label: 'Más de $1,000,000',    sublabel: 'Lujo / deportivo' },
 ]
 
 export default function VehicleStep() {
@@ -52,10 +63,7 @@ export default function VehicleStep() {
     }
 
     void loadVehicles()
-
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [])
 
   function clearError(field: string) {
@@ -74,7 +82,7 @@ export default function VehicleStep() {
   }
 
   function loadSaved(id: string) {
-    const found = savedVehicles.find(v => v.id === id)
+    const found = savedVehicles.find(sv => sv.id === id)
     if (found) {
       setErrors({})
       updateDraft({ vehicle: found })
@@ -95,7 +103,14 @@ export default function VehicleStep() {
     setStep(2)
   }
 
-  const canContinue = Boolean(v.brand && v.model && v.year && v.plates && v.type && v.transmission)
+  const canContinue = Boolean(
+    v.brand?.trim() &&
+    v.model?.trim() &&
+    Number(v.year) >= 1900 &&   // year llega como string desde el input type="number"
+    v.plates?.trim() &&
+    v.type &&
+    v.transmission
+  )
   const errorFor = (field: string) => errors[`vehicle.${field}`]
 
   return (
@@ -250,6 +265,31 @@ export default function VehicleStep() {
           <option value="Requiere atención">Requiere atención</option>
         </select>
         {errorFor('condition') && <p className="field-error">{errorFor('condition')}</p>}
+      </div>
+
+      {/* Valor declarado del vehículo */}
+      <div className="field-group">
+        <label className="field-label">Valor aproximado del vehículo</label>
+        <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+          Usado para calcular la tarifa y cobertura del servicio. Elige el rango más cercano.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {VALUE_RANGES.map(({ value, label, sublabel }) => (
+            <button key={value}
+              onClick={() => update('valueRange', value)}
+              style={{
+                background: v.valueRange === value ? 'var(--primary-dim)' : 'var(--surface-2)',
+                border: `1px solid ${v.valueRange === value ? 'var(--primary)' : 'var(--border)'}`,
+                borderRadius: 'var(--radius-sm)', padding: '10px 14px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                cursor: 'pointer', color: 'var(--text)', textAlign: 'left',
+              }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>{label}</span>
+              <span className="muted" style={{ fontSize: 12 }}>{sublabel}</span>
+            </button>
+          ))}
+        </div>
+        {errorFor('valueRange') && <p className="field-error">{errorFor('valueRange')}</p>}
       </div>
 
       <button className="btn-primary" disabled={!canContinue} onClick={handleContinue}>

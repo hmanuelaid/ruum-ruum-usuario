@@ -4,6 +4,7 @@ import type {
   ServiceType,
   TransmissionType,
   VehicleType,
+  VehicleValueRange,
 } from '@/lib/types'
 
 export type FieldErrors = Record<string, string>
@@ -24,6 +25,7 @@ export type ValidatedVehicleInput = {
   type: VehicleType
   transmission: TransmissionType
   condition?: string
+  valueRange?: VehicleValueRange
 }
 
 export type ValidatedRouteInput = {
@@ -69,12 +71,13 @@ const SERVICE_TYPES = [
   'especial',
 ] as const
 
-const VEHICLE_TYPES = ['sedan', 'suv', 'pickup', 'van', 'moto', 'otro'] as const
-const TRANSMISSION_TYPES = ['automatica', 'manual'] as const
+const VEHICLE_TYPES        = ['sedan', 'suv', 'pickup', 'van', 'moto', 'otro'] as const
+const TRANSMISSION_TYPES   = ['automatica', 'manual'] as const
+const VEHICLE_VALUE_RANGES = ['hasta_200k', '200k_500k', '500k_1m', 'mas_1m'] as const
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_RE   = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const PLATES_RE = /^[A-Z0-9]{5,8}$/
-const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/
+const VIN_RE    = /^[A-HJ-NPR-Z0-9]{17}$/
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -92,11 +95,7 @@ function cleanText(value: unknown): string {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : ''
 }
 
-function requiredText(
-  value: unknown,
-  minLength: number,
-  maxLength: number,
-): string | null {
+function requiredText(value: unknown, minLength: number, maxLength: number): string | null {
   const text = cleanText(value)
   if (text.length < minLength || text.length > maxLength) return null
   return text
@@ -181,40 +180,46 @@ export function validateVehicleInput(input: unknown): ValidationResult<Validated
 
   const id = optionalText(vehicle.id, 80)
   if (id === null || (id && !UUID_RE.test(id))) {
-    errors.id = 'Selecciona un vehiculo guardado valido.'
+    errors.id = 'Selecciona un vehículo guardado válido.'
   }
 
   const alias = optionalText(vehicle.alias, 80)
-  if (alias === null) errors.alias = 'El alias del vehiculo es demasiado largo.'
+  if (alias === null) errors.alias = 'El alias del vehículo es demasiado largo.'
 
   const brand = requiredText(vehicle.brand, 2, 40)
-  if (!brand) errors.brand = 'Ingresa una marca valida.'
+  if (!brand) errors.brand = 'Ingresa una marca válida.'
 
   const model = requiredText(vehicle.model, 1, 60)
-  if (!model) errors.model = 'Ingresa un modelo valido.'
+  if (!model) errors.model = 'Ingresa un modelo válido.'
 
   const year = normalizeVehicleYear(vehicle.year)
-  if (!year) errors.year = 'Ingresa un ano valido del vehiculo.'
+  if (!year) errors.year = 'Ingresa un año válido del vehículo.'
 
   const color = optionalText(vehicle.color, 40)
   if (color === null) errors.color = 'El color es demasiado largo.'
 
   const plates = normalizePlates(vehicle.plates)
-  if (!plates) errors.plates = 'Ingresa placas validas, de 5 a 8 caracteres.'
+  if (!plates) errors.plates = 'Ingresa placas válidas, de 5 a 8 caracteres.'
 
   const vin = normalizeVin(vehicle.vin)
-  if (vin === null) errors.vin = 'El VIN debe tener 17 caracteres validos.'
+  if (vin === null) errors.vin = 'El VIN debe tener 17 caracteres válidos.'
 
   const type = vehicle.type
-  if (!isAllowed(type, VEHICLE_TYPES)) errors.type = 'Selecciona un tipo de vehiculo valido.'
+  if (!isAllowed(type, VEHICLE_TYPES)) errors.type = 'Selecciona un tipo de vehículo válido.'
 
   const transmission = vehicle.transmission
   if (!isAllowed(transmission, TRANSMISSION_TYPES)) {
-    errors.transmission = 'Selecciona una transmision valida.'
+    errors.transmission = 'Selecciona una transmisión válida.'
   }
 
   const condition = optionalText(vehicle.condition, 80)
   if (condition === null) errors.condition = 'El estado declarado es demasiado largo.'
+
+  // Rango de valor — opcional; si se envía debe ser un valor de la unión
+  const valueRange = vehicle.valueRange
+  if (valueRange !== undefined && !isAllowed(valueRange, VEHICLE_VALUE_RANGES)) {
+    errors.valueRange = 'Selecciona un rango de valor válido.'
+  }
 
   if (Object.keys(errors).length > 0) {
     return validationError(errors)
@@ -234,6 +239,7 @@ export function validateVehicleInput(input: unknown): ValidationResult<Validated
   if (color) data.color = color
   if (vin) data.vin = vin
   if (condition) data.condition = condition
+  if (isAllowed(valueRange, VEHICLE_VALUE_RANGES)) data.valueRange = valueRange
 
   return validationOk(data)
 }
@@ -355,10 +361,10 @@ export function validateQuotePayload(input: unknown): ValidationResult<{
   const errors: FieldErrors = {}
 
   const originAddress = normalizeAddress(origin.address)
-  if (!originAddress) errors['origin.address'] = 'Ingresa una direccion de origen valida.'
+  if (!originAddress) errors['origin.address'] = 'Ingresa una dirección de origen válida.'
 
   const destinationAddress = normalizeAddress(destination.address)
-  if (!destinationAddress) errors['destination.address'] = 'Ingresa una direccion de destino valida.'
+  if (!destinationAddress) errors['destination.address'] = 'Ingresa una dirección de destino válida.'
 
   if (Object.keys(errors).length > 0) {
     return validationError(errors)
@@ -386,7 +392,7 @@ export function validateTripRequestPayload(input: unknown): ValidationResult<Val
 
   const asap = typeof payload.asap === 'boolean' ? payload.asap : true
   const scheduledAt = optionalText(payload.scheduledAt, 40)
-  if (scheduledAt === null) errors.scheduledAt = 'La fecha programada no es valida.'
+  if (scheduledAt === null) errors.scheduledAt = 'La fecha programada no es válida.'
 
   if (!asap) {
     if (!scheduledAt) {
@@ -408,7 +414,7 @@ export function validateTripRequestPayload(input: unknown): ValidationResult<Val
     ? payload.tripScope
     : undefined
 
-  // Ventanas de tiempo — formato HH:MM opcional
+  // Ventanas de tiempo — formato HH:MM opcional con validación de coherencia
   const TIME_RE = /^\d{2}:\d{2}$/
   function optionalTime(value: unknown): string | undefined {
     const t = cleanText(value)
@@ -418,6 +424,24 @@ export function validateTripRequestPayload(input: unknown): ValidationResult<Val
   const collectionWindowEnd   = optionalTime(payload.collectionWindowEnd)
   const deliveryWindowStart   = optionalTime(payload.deliveryWindowStart)
   const deliveryWindowEnd     = optionalTime(payload.deliveryWindowEnd)
+
+  // Validación de coherencia de ventanas (Fase 2.3)
+  if (collectionWindowStart && collectionWindowEnd) {
+    if (collectionWindowStart >= collectionWindowEnd)
+      errors.collectionWindowEnd = 'La hora de fin de recolección debe ser posterior a la de inicio.'
+  }
+  if (deliveryWindowStart && deliveryWindowEnd) {
+    if (deliveryWindowStart >= deliveryWindowEnd)
+      errors.deliveryWindowEnd = 'La hora de fin de entrega debe ser posterior a la de inicio.'
+  }
+  if (collectionWindowEnd && deliveryWindowStart) {
+    if (deliveryWindowStart < collectionWindowEnd)
+      errors.deliveryWindowStart = 'La entrega no puede iniciar antes de que termine la recolección.'
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return validationError(errors)
+  }
 
   const data: ValidatedTripRequestPayload = {
     ...routeResult.data,

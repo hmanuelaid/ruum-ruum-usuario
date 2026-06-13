@@ -4,20 +4,7 @@ import Link from 'next/link'
 import { useAuthStore } from '@/lib/store'
 import { Chip } from '@/components/ui/Chip'
 import { createClient } from '@/lib/supabase'
-
-const STATUS_LABELS: Record<string, string> = {
-  solicitud_recibida: 'Solicitud recibida', pendiente_revision: 'En revisión',
-  pendiente_asignacion: 'Sin conductor', conductor_asignado: 'Conductor asignado',
-  conductor_en_camino: 'En camino', recoleccion_proceso: 'Recolección',
-  traslado_curso: 'En curso', entrega_proceso: 'Entrega',
-  finalizado: 'Finalizado', cancelado: 'Cancelado', incidente: 'Incidente',
-}
-
-const ACTIVE_STATUSES = [
-  'solicitud_recibida','pendiente_revision','pendiente_asignacion',
-  'conductor_asignado','conductor_en_camino','recoleccion_proceso',
-  'evidencia_inicial_pendiente','traslado_curso','entrega_proceso','evidencia_final_pendiente',
-]
+import { STATUS_LABELS, ACTIVE_STATUSES } from '@/lib/tripStatus'
 
 interface Trip {
   id: string

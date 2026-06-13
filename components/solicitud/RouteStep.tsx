@@ -6,10 +6,22 @@ import {
   validateRouteInput,
   type FieldErrors,
 } from '@/lib/validation/tripRequest'
+import type { SolicitudDraft } from '@/lib/types'
 
 // Convierte el valor a mayúsculas antes de enviarlo al handler
 function toUpper(value: string) {
   return value.toUpperCase()
+}
+
+// ─── Construye el string de dirección desde campos desglosados ────────────────
+// Se llama en cada onChange para que draft.origin.address y
+// draft.destination.address nunca queden desincronizados con los campos.
+function buildAddress(loc: Partial<SolicitudDraft['origin']>): string | undefined {
+  const { calle, numero, colonia, municipio, estado, codigoPostal } = loc as Record<string, string | undefined>
+  if (calle && numero && colonia && municipio && estado && codigoPostal) {
+    return `${calle} ${numero}, ${colonia}, ${municipio}, ${estado}, CP ${codigoPostal}`
+  }
+  return undefined
 }
 
 // ─── Sección de dirección reutilizable ────────────────────────────────────────
@@ -179,14 +191,31 @@ export default function RouteStep() {
     })
   }
 
+  // Actualiza un campo y reconstruye address al vuelo para mantener sincronía.
+  // De este modo ReviewStep siempre tiene un address actualizado sin importar
+  // si el usuario regresó con "← Atrás" y editó sin presionar "Continuar".
   function updateOrigin(field: string, value: string) {
     clearError(`origin.${field}`)
-    updateDraft({ origin: { ...draft.origin, [field]: value } })
+    const updated = { ...draft.origin, [field]: value }
+    updateDraft({
+      origin: {
+        ...updated,
+        address: buildAddress(updated) ?? draft.origin.address,
+      },
+    })
   }
+
   function updateDest(field: string, value: string) {
     clearError(`destination.${field}`)
-    updateDraft({ destination: { ...draft.destination, [field]: value } })
+    const updated = { ...draft.destination, [field]: value }
+    updateDraft({
+      destination: {
+        ...updated,
+        address: buildAddress(updated) ?? draft.destination.address,
+      },
+    })
   }
+
   function updateOriginContact(field: string, value: string) {
     clearError(`originContact.${field}`)
     updateDraft({ originContact: { ...draft.originContact, [field]: value } })

@@ -1,16 +1,15 @@
-// ─── app/api/trips/quote/route.ts ─────────────────────────────────────────────
+
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { calcQuote, estimateDistance } from '@/lib/pricing'
 import { firstValidationError, validateQuotePayload } from '@/lib/validation/tripRequest'
 import { enforceRateLimit } from '@/lib/rateLimit'
-import type { VehicleType, ServiceType } from '@/lib/types'
-
+ 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status })
 }
-
+ 
 async function createSupabaseServerClient() {
   const cookieStore = await cookies()
   return createServerClient(
@@ -25,46 +24,35 @@ async function createSupabaseServerClient() {
     },
   )
 }
-
+ 
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
+ 
   if (authError || !user) {
     return jsonError('Sesión no autenticada.', 401)
   }
-
+ 
   // Rate limit: 30 quotes por 10 minutos por usuario.
-  // Más generoso que /trips/request (8/10 min) porque el usuario
-  // puede recalcular varias veces durante la revisión.
+  // Protege las cuotas gratuitas de Nominatim (1 req/seg) y ORS (2 000/día).
   const rateLimitResponse = await enforceRateLimit(request, user.id, {
     prefix: 'trip-quote',
     limit: 30,
     window: '10 m',
   })
   if (rateLimitResponse) return rateLimitResponse
-
+ 
   const payload = await request.json().catch(() => null) as unknown
   const validation = validateQuotePayload(payload)
-
+ 
   if (!validation.ok) {
     return jsonError(firstValidationError(validation.errors))
   }
-
+ 
   const { origin, destination } = validation.data
-
-  // Parámetros opcionales para calcQuote
-  // Se reciben del wizard (draft) pero no son requeridos por validateQuotePayload
-  const body = payload as Record<string, unknown>
-  const vehicleType  = body.vehicleType  as VehicleType  | undefined
-  const serviceType  = body.serviceType  as ServiceType  | undefined
-  const tripScope    = body.tripScope    as 'local' | 'foraneo' | undefined
-  const asap         = typeof body.asap === 'boolean' ? body.asap : undefined
-  const scheduledAt  = typeof body.scheduledAt === 'string' ? body.scheduledAt : undefined
-
   let distanceKm: number
   try {
     distanceKm = await estimateDistance(origin.address, destination.address)
@@ -72,15 +60,9 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : 'No se pudo calcular la distancia.'
     return jsonError(message, 502)
   }
-
-  const clientPriceMxn = calcQuote(distanceKm, {
-    vehicleType,
-    serviceType,
-    tripScope,
-    asap,
-    scheduledAt,
-  })
-
+ 
+  const clientPriceMxn = calcQuote(distanceKm)
+ 
   return NextResponse.json({
     ok: true,
     data: {
@@ -89,3 +71,4 @@ export async function POST(request: Request) {
     },
   })
 }
+ 

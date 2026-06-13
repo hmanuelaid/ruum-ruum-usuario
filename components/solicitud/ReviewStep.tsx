@@ -27,6 +27,17 @@ function formatMXN(amount: number): string {
   }).format(amount)
 }
 
+// Reconstruye el string de dirección desde campos desglosados si address
+// no está presente (por ejemplo si el usuario regresó y editó sin confirmar).
+function resolveAddress(loc: Record<string, string | undefined>): string | undefined {
+  if (loc.address) return loc.address
+  const { calle, numero, colonia, municipio, estado, codigoPostal } = loc
+  if (calle && numero && colonia && municipio && estado && codigoPostal) {
+    return `${calle} ${numero}, ${colonia}, ${municipio}, ${estado}, CP ${codigoPostal}`
+  }
+  return undefined
+}
+
 export default function ReviewStep() {
   const { draft, resetDraft } = useWizardStore()
   const { showToast } = useAppStore()
@@ -36,26 +47,22 @@ export default function ReviewStep() {
   const [quote, setQuote] = useState<Quote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
-  const hasRoute = Boolean(draft.origin.address && draft.destination.address)
+
+  // Resuelve addresses tolerando ediciones intermedias sin "Continuar"
+  const originAddress      = resolveAddress(draft.origin as Record<string, string | undefined>)
+  const destinationAddress = resolveAddress(draft.destination as Record<string, string | undefined>)
+  const hasRoute = Boolean(originAddress && destinationAddress)
 
   useEffect(() => {
-    const originAddress = draft.origin.address
-    const destinationAddress = draft.destination.address
-
-    if (!originAddress || !destinationAddress) {
-      return
-    }
+    if (!originAddress || !destinationAddress) return
 
     const validation = validateQuotePayload({
-      origin: { address: originAddress },
+      origin:      { address: originAddress },
       destination: { address: destinationAddress },
     })
 
-    if (!validation.ok) {
-      return
-    }
+    if (!validation.ok) return
 
-    const quotePayload = validation.data
     let cancelled = false
 
     async function loadQuote() {
@@ -66,7 +73,18 @@ export default function ReviewStep() {
         const response = await fetch('/api/trips/quote', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(quotePayload),
+          body: JSON.stringify({
+            // Direcciones (requeridas por validateQuotePayload)
+            origin:      { address: originAddress },
+            destination: { address: destinationAddress },
+            // Parámetros de tarifa — todos los datos que el usuario ya capturó
+            vehicleType:       draft.vehicle.type,
+            serviceType:       draft.serviceType,
+            vehicleValueRange: draft.vehicle.valueRange,
+            tripScope:         draft.tripScope,
+            asap:              draft.asap,
+            scheduledAt:       draft.scheduledAt,
+          }),
         })
 
         const payload = await response.json().catch(() => null) as {
@@ -94,11 +112,19 @@ export default function ReviewStep() {
     }
 
     loadQuote()
-
-    return () => {
-      cancelled = true
-    }
-  }, [draft.destination.address, draft.origin.address])
+    return () => { cancelled = true }
+  // Se recalcula si cambia cualquier input que afecte el precio
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    originAddress,
+    destinationAddress,
+    draft.vehicle.type,
+    draft.vehicle.valueRange,
+    draft.serviceType,
+    draft.tripScope,
+    draft.asap,
+    draft.scheduledAt,
+  ])
 
   async function handleConfirm() {
     if (!user) { showToast('Debes iniciar sesión'); return }
@@ -108,15 +134,15 @@ export default function ReviewStep() {
       : undefined
 
     const validation = validateTripRequestPayload({
-      serviceType: draft.serviceType ?? 'personal',
-      vehicle: draft.vehicle,
-      origin: draft.origin,
-      destination: draft.destination,
-      originContact: draft.originContact,
-      destinationContact: draft.destinationContact,
-      asap: Boolean(draft.asap),
+      serviceType:          draft.serviceType ?? 'personal',
+      vehicle:              draft.vehicle,
+      origin:               draft.origin,
+      destination:          draft.destination,
+      originContact:        draft.originContact,
+      destinationContact:   draft.destinationContact,
+      asap:                 Boolean(draft.asap),
       scheduledAt,
-      specialInstructions: draft.specialInstructions,
+      specialInstructions:  draft.specialInstructions,
     })
 
     if (!validation.ok) {
@@ -134,9 +160,7 @@ export default function ReviewStep() {
 
     const payload = await response.json().catch(() => null) as {
       ok?: boolean
-      data?: {
-        tripId?: string
-      }
+      data?: { tripId?: string }
       error?: string
     } | null
 
@@ -174,7 +198,7 @@ export default function ReviewStep() {
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginTop: 4 }} />
           <div>
             <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Origen</p>
-            <p style={{ fontWeight: 600, fontSize: 14 }}>{draft.origin.address}</p>
+            <p style={{ fontWeight: 600, fontSize: 14 }}>{originAddress}</p>
             {draft.origin.reference && <p className="muted">{draft.origin.reference}</p>}
             {draft.origin.collectionNotes && (
               <p className="muted" style={{ fontStyle: 'italic' }}>📋 {draft.origin.collectionNotes}</p>
@@ -188,7 +212,7 @@ export default function ReviewStep() {
           <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--success)', flexShrink: 0, marginTop: 4 }} />
           <div>
             <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Destino</p>
-            <p style={{ fontWeight: 600, fontSize: 14 }}>{draft.destination.address}</p>
+            <p style={{ fontWeight: 600, fontSize: 14 }}>{destinationAddress}</p>
             {draft.destination.reference && <p className="muted">{draft.destination.reference}</p>}
             {draft.destination.collectionNotes && (
               <p className="muted" style={{ fontStyle: 'italic' }}>📋 {draft.destination.collectionNotes}</p>
@@ -223,6 +247,12 @@ export default function ReviewStep() {
           <span className="muted">Tipo</span>
           <span style={{ fontWeight: 600 }}>{SERVICE_LABELS[draft.serviceType ?? ''] ?? '—'}</span>
         </div>
+        {draft.tripScope && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+            <span className="muted">Alcance</span>
+            <span style={{ fontWeight: 600 }}>{draft.tripScope === 'foraneo' ? 'Foráneo' : 'Local'}</span>
+          </div>
+        )}
       </div>
 
       <div className="card-hero" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

@@ -99,7 +99,7 @@ export default function CancelacionesPage() {
             </table>
           </div>
           <h3>2.2 Cómo Cancelar</h3>
-          <p>La cancelación se realiza desde la app en el detalle del servicio activo, opción "Cancelar servicio". No se aceptan cancelaciones por canales no oficiales.</p>
+          <p>La cancelación se realiza desde la app en el detalle del servicio activo, opción &quot;Cancelar servicio&quot;. No se aceptan cancelaciones por canales no oficiales.</p>
           <h3>2.3 Cancelaciones Frecuentes</h3>
           <p>Ruum Ruum se reserva el derecho de suspender temporalmente la Cuenta de un Usuario con cancelaciones excesivas, notificándolo previamente.</p>
         </Accordion>
@@ -149,7 +149,7 @@ export default function CancelacionesPage() {
 
         <Accordion num="6" title="Proceso de Reclamaciones">
           <h3>6.1 Cómo Presentar una Reclamación</h3>
-          <p>Desde el historial de viajes en la app, seleccionar "Reportar problema". La reclamación debe incluir:</p>
+          <p>Desde el historial de viajes en la app, seleccionar &quot;Reportar problema&quot;. La reclamación debe incluir:</p>
           <ul>
             <li>Descripción del motivo de la reclamación.</li>
             <li>Evidencia de soporte (fotografías, capturas u otros documentos relevantes).</li>

@@ -80,7 +80,7 @@ export default function IncidentesPage() {
           <h3>2.1 Reporte de Daños</h3>
           <p>
             Si el Usuario identifica un daño que no estaba presente al momento de la entrega, deberá reportarlo mediante
-            "Reportar problema" en la app, <strong>dentro de las 2 horas siguientes a la entrega</strong> en el punto de destino.
+            &quot;Reportar problema&quot; en la app, <strong>dentro de las 2 horas siguientes a la entrega</strong> en el punto de destino.
             El reporte debe incluir fotografías del daño y una descripción de su ubicación y características.
           </p>
           <h3>2.2 Evaluación y Resolución</h3>
@@ -192,7 +192,7 @@ export default function IncidentesPage() {
         <Accordion num="7–9" title="Canales de Reporte, Modificaciones y Aceptación">
           <h3>7. Canales de Reporte de Incidentes</h3>
           <ul>
-            <li>Opción "Reportar problema" en el historial de viajes de la app móvil.</li>
+            <li>Opción &quot;Reportar problema&quot; en el historial de viajes de la app móvil.</li>
             <li>Canales de soporte y atención al cliente de Ruum Ruum, para incidentes que requieran atención inmediata.</li>
           </ul>
           <h3>8. Modificaciones a la Política</h3>

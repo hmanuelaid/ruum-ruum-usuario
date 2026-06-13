@@ -1,79 +1,145 @@
-import Link from 'next/link'
+import Link from "next/link";
+import { ArrowRight, Download } from "lucide-react";
+import styles from "./legal.module.css";
 
-const LEGAL_DOCUMENT_URL = '/legal/RuumRuum_Documentos_Legales_Base.docx'
+const LEGAL_DOCUMENT_URL = "/legal/RuumRuum_Documentos_Legales_Base.docx";
 
-const documents = [
-  'Términos y condiciones',
-  'Aviso de privacidad integral',
-  'Política de cookies',
-  'Política de cancelaciones',
-  'Consentimiento de evidencias fotográficas',
-  'Consentimiento de geolocalización',
-  'Acuerdo de firma electrónica',
-]
+const legalDocuments = [
+  {
+    icon: "🍪",
+    title: "Política de Cookies y Tecnologías de Rastreo",
+    href: "/cookies",
+    description: "Uso de cookies, analítica, rastreo y preferencias dentro de la Plataforma.",
+  },
+  {
+    icon: "📜",
+    title: "Términos y Condiciones de Uso",
+    href: "/terminos",
+    description: "Reglas generales para usuarios, conductores certificados y uso del servicio.",
+  },
+  {
+    icon: "🔒",
+    title: "Aviso de Privacidad Integral",
+    href: "/privacidad",
+    description: "Tratamiento de datos personales, finalidades, transferencias y derechos ARCO.",
+  },
+  {
+    icon: "↩️",
+    title: "Política de Cancelaciones y Reembolsos",
+    href: "/cancelaciones",
+    description: "Ventanas de cancelación, cargos aplicables, reembolsos y reclamaciones.",
+  },
+  {
+    icon: "🚨",
+    title: "Política de Incidentes y Siniestros",
+    href: "/incidentes",
+    description: "Procedimientos para daños, robos, retrasos, accidentes y reportes.",
+  },
+  {
+    icon: "✍️",
+    title: "Acuerdo para el Uso de Firma Electrónica",
+    href: "/firma-electronica",
+    description: "Consentimiento, validez jurídica e integridad de registros electrónicos.",
+  },
+  {
+    icon: "📷",
+    title: "Consentimiento de Evidencias Fotográficas",
+    href: "/consentimiento-fotos",
+    description: "Captura, uso, conservación y confidencialidad de evidencias del vehículo.",
+  },
+  {
+    icon: "📍",
+    title: "Consentimiento de Geolocalización",
+    href: "/geolocalizacion",
+    description: "Datos de ubicación recopilados para asignación, seguimiento y seguridad.",
+  },
+];
 
 export default function LegalPage() {
   return (
-    <main className="page-shell">
-      <section className="hero-card">
-        <div>
-          <Link href="/cuenta" className="btn-back">← Atrás</Link>
-          <p className="eyebrow">Legal</p>
-          <h1>Documentos legales</h1>
-          <p className="muted">
-            Consulta y descarga los documentos legales base de Ruum-Ruum by MoviliaX.
+    <main className={styles.page}>
+      <header className={styles.topbar}>
+        <div className={styles.logo}>
+          Ruum<span>Ruum</span>
+        </div>
+        <div className={styles.badge}>
+          Centro Legal · v1.0
+        </div>
+      </header>
+
+      <div className={styles.shell}>
+        <section className={styles.hero}>
+          <p className={styles.eyebrow}>
+            📋 Documentos Legales
           </p>
-        </div>
-      </section>
+          <h1>
+            Centro Legal
+            <br />
+            Ruum Ruum
+          </h1>
+          <p className={styles.heroText}>
+            Aquí encontrarás todos los documentos legales que rigen el uso de la Plataforma.
+            Versión 1.0 — Junio 2026.
+          </p>
+        </section>
 
-      <section className="card">
-        <h2>Documento completo</h2>
-        <p className="muted" style={{ marginBottom: 14 }}>
-          Este archivo reúne las condiciones, avisos y consentimientos aplicables al uso del servicio.
-        </p>
-        <a
-          className="btn-primary"
-          href={LEGAL_DOCUMENT_URL}
-          download
-          style={{ display: 'inline-flex', textDecoration: 'none' }}
-        >
-          Descargar documentos legales
-        </a>
-      </section>
-
-      <section className="card">
-        <h2>Incluye</h2>
-        <div className="stack" style={{ gap: 8 }}>
-          {documents.map((document) => (
-            <div
-              key={document}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                padding: '10px 0',
-                borderBottom: '1px solid var(--border)',
-              }}
+        <section className={styles.documentGrid}>
+          {legalDocuments.map((document) => (
+            <Link
+              key={document.href}
+              href={document.href}
+              className={styles.documentCard}
             >
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{document}</span>
-              <span style={{ color: 'var(--text-muted)' }}>DOCX</span>
-            </div>
+              <span className={styles.documentIcon}>
+                {document.icon}
+              </span>
+              <span className={styles.documentBody}>
+                <span className={styles.documentTitle}>
+                  {document.title}
+                </span>
+                <span className={styles.documentMeta}>
+                  Versión 1.0 — Junio 2026
+                </span>
+                <span className={styles.documentDescription}>
+                  {document.description}
+                </span>
+              </span>
+              <ArrowRight
+                size={18}
+                className={styles.documentArrow}
+                aria-hidden="true"
+              />
+            </Link>
           ))}
-        </div>
-      </section>
+        </section>
 
-      <section className="card">
-        <h2>Accesos rápidos</h2>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <Link className="btn-secondary" href="/terminos" style={{ textDecoration: 'none', textAlign: 'center' }}>
-            Ver términos y condiciones
-          </Link>
-          <Link className="btn-secondary" href="/privacidad" style={{ textDecoration: 'none', textAlign: 'center' }}>
-            Ver aviso de privacidad
-          </Link>
+        <section className={styles.downloadCard}>
+          <div className={styles.downloadHeader}>
+            <span className={styles.downloadIcon}>📄</span>
+            <div>
+              <h2>Documento completo descargable</h2>
+              <p>
+                También puedes descargar el paquete legal base en formato DOCX.
+              </p>
+            </div>
+          </div>
+          <a
+            className={styles.downloadButton}
+            href={LEGAL_DOCUMENT_URL}
+            download
+          >
+            <Download size={16} />
+            Descargar documentos legales
+          </a>
+        </section>
+
+        <div className={styles.versionRow}>
+          <span className={styles.versionPill}>
+            Vigente
+          </span>
+          <span className={styles.versionDate}>Versión 1.0 — Junio 2026</span>
         </div>
-      </section>
+      </div>
     </main>
-  )
+  );
 }

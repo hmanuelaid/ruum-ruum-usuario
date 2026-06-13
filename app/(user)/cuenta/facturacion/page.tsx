@@ -4,7 +4,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { clientLogger } from '@/lib/clientLogger'
-import { createBrowserClient } from '@supabase/ssr'   // solo para Storage (upload de constancia)
 import { useAppStore } from '@/lib/store'
 
 // ─── Catálogos SAT ────────────────────────────────────────────────────────────
@@ -108,13 +107,6 @@ export default function FacturacionPage() {
   const { showToast } = useAppStore()
   const constanciaRef = useRef<HTMLInputElement>(null)
 
-  // Solo se usa para Storage (upload de constancia); las llamadas de datos
-  // pasan por /api/billing que invoca la RPC update_billing_profile en PG.
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   const [form, setForm] = useState({
     rfc: '',
     razon_social: '',
@@ -176,7 +168,7 @@ export default function FacturacionPage() {
     setForm(cur => ({ ...cur, [field]: value }))
   }, [])
 
-  // ── Subir constancia (Storage directo + PATCH /api/billing) ───────────────
+  // ── Subir constancia via API route (Storage privado + URL firmada) ────────
   async function handleConstancia(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -193,37 +185,31 @@ export default function FacturacionPage() {
 
     setConstanciaUpload(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.replace('/login?redirectTo=/cuenta/facturacion'); return }
+      const formData = new FormData()
+      formData.append('file', file)
 
-      const ext  = file.name.split('.').pop()
-      const path = `constancias/${session.user.id}.${ext}`
-
-      const { error: uploadErr } = await supabase.storage
-        .from('documents')
-        .upload(path, file, { upsert: true, contentType: file.type })
-
-      if (uploadErr) throw uploadErr
-
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path)
-      const publicUrl = urlData.publicUrl + `?t=${Date.now()}`
-
-      // Persistir via API route → RPC (validación doble en PG)
-      const res = await fetch('/api/billing', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ constancia_sat_url: publicUrl, constancia_sat_name: file.name }),
+      const res = await fetch('/api/billing/constancia', {
+        method: 'POST',
+        body: formData,
       })
 
-      const payload = await res.json().catch(() => null) as { ok: boolean; error?: string } | null
-      if (!res.ok || !payload?.ok) throw new Error(payload?.error ?? 'Error al guardar la constancia.')
+      if (res.status === 401) { router.replace('/login?redirectTo=/cuenta/facturacion'); return }
 
-      setConstanciaUrl(publicUrl)
-      setConstanciaName(file.name)
+      const payload = await res.json().catch(() => null) as
+        | { ok: true; data: { constancia_sat_url: string; constancia_sat_name: string } }
+        | { ok: false; error?: string }
+        | null
+
+      if (!res.ok || !payload?.ok) {
+        throw new Error(payload && !payload.ok ? (payload.error ?? 'Error al guardar la constancia.') : 'Error al guardar la constancia.')
+      }
+
+      setConstanciaUrl(payload.data.constancia_sat_url)
+      setConstanciaName(payload.data.constancia_sat_name)
       showToast('Constancia subida correctamente.')
     } catch (err) {
       clientLogger.error('Constancia upload error:', err)
-      showToast('No pudimos subir la constancia. Intenta de nuevo.')
+      showToast(err instanceof Error ? err.message : 'No pudimos subir la constancia. Intenta de nuevo.')
     } finally {
       setConstanciaUpload(false)
       if (e.target) e.target.value = ''

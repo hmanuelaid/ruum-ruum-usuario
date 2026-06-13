@@ -1,21 +1,6 @@
 'use client'
 import { useAppStore } from '@/lib/store'
-
-const STATUS_LABELS: Record<string, string> = {
-  solicitud_recibida:   'Solicitud recibida',
-  pendiente_revision:   'En revisión',
-  pendiente_asignacion: 'Sin conductor',
-  conductor_asignado:   'Conductor asignado',
-  conductor_en_camino:  'En camino al origen',
-  recoleccion_proceso:  'Recolección en proceso',
-  evidencia_inicial_pendiente: 'Evidencia inicial pendiente',
-  traslado_curso:       'Traslado en curso',
-  entrega_proceso:      'Entrega en proceso',
-  evidencia_final_pendiente: 'Evidencia final pendiente',
-  finalizado:           'Finalizado',
-  cancelado:            'Cancelado',
-  incidente:            'En revisión por incidente',
-}
+import { STATUS_LABELS } from '@/lib/tripStatus'
 
 function formatDate(iso?: string) {
   if (!iso) return ''

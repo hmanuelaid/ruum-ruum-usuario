@@ -1,6 +1,0 @@
-node_modules/
-.next/
-.husky/
-scripts/precommit-check.js
-.env
-.env.*

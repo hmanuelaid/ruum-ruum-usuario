@@ -490,6 +490,7 @@ export default function FacturacionPage() {
               {/* Preview imagen */}
               {constanciaUrl && !isPdf && (
                 <div style={{ padding: '0 14px 12px' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- Vista previa de URL firmada temporal de Supabase Storage. */}
                   <img
                     src={constanciaUrl}
                     alt="Constancia de Situación Fiscal"

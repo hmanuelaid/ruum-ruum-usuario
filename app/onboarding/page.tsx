@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function OnboardingPage() {
-  const router = useRouter()
   const [step, setStep] = useState<'intro' | 'welcome'>('intro')
 
   if (step === 'intro') return <IntroScreen onContinue={() => setStep('welcome')} />

@@ -10,6 +10,12 @@ const FAQS = [
   { q: '¿Qué pasa si hay un daño?', a: 'Reporta el incidente desde la app. Nuestro equipo lo revisa con la evidencia disponible y te contacta en menos de 24 horas.' },
 ]
 
+const SUPPORT_EMAIL = 'ruum.ruum.mx@gmail.com'
+const SUPPORT_PHONE_DISPLAY = '+52 566 952 2178'
+const SUPPORT_PHONE_LINK = '+525669522178'
+const SUPPORT_WHATSAPP_DISPLAY = '5669522178'
+const SUPPORT_WHATSAPP_URL = 'https://wa.me/525669522178?text=Hola%20Ruum-Ruum%2C%20necesito%20ayuda%20con%20mi%20servicio.'
+
 export default function SoportePage() {
   const { showToast } = useAppStore()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
@@ -58,18 +64,26 @@ export default function SoportePage() {
         <p className="kicker" style={{ marginBottom: 10 }}>Contacto directo</p>
         <div className="quick-actions" style={{ gridTemplateColumns: 'repeat(2,1fr)' }}>
           {[
-            { emoji: '💬', label: 'Chat en vivo', desc: 'Respuesta inmediata', action: () => showToast('Iniciando chat...') },
-            { emoji: '📞', label: 'Llamar', desc: '+52 55 8000 0000', action: () => showToast('Marcando...') },
-            { emoji: '📧', label: 'Correo', desc: 'soporte@ruumruum.mx', action: () => showToast('Abriendo correo...') },
-            { emoji: '🚨', label: 'Emergencia', desc: 'Asistencia 24/7', action: () => showToast('Conectando con emergencias...') },
-          ].map(({ emoji, label, desc, action }) => (
-            <button key={label} className="quick-action" onClick={action} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+            { emoji: '💬', label: 'WhatsApp', desc: SUPPORT_WHATSAPP_DISPLAY, href: SUPPORT_WHATSAPP_URL, target: '_blank' },
+            { emoji: '📞', label: 'Llamar', desc: SUPPORT_PHONE_DISPLAY, href: `tel:${SUPPORT_PHONE_LINK}` },
+            { emoji: '📧', label: 'Correo', desc: SUPPORT_EMAIL, href: `mailto:${SUPPORT_EMAIL}?subject=Soporte%20Ruum-Ruum` },
+            { emoji: '🚨', label: 'Emergencia', desc: 'Asistencia telefónica', href: `tel:${SUPPORT_PHONE_LINK}` },
+          ].map(({ emoji, label, desc, href, target }) => (
+            <a
+              key={label}
+              className="quick-action"
+              href={href}
+              target={target}
+              rel={target ? 'noopener noreferrer' : undefined}
+              onClick={() => showToast(`Abriendo ${label.toLowerCase()}...`)}
+              style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6, textDecoration: 'none' }}
+            >
               <span style={{ fontSize: '1.4rem' }}>{emoji}</span>
               <div>
                 <p style={{ fontWeight: 700, fontSize: 13 }}>{label}</p>
                 <p className="muted" style={{ fontSize: 11 }}>{desc}</p>
               </div>
-            </button>
+            </a>
           ))}
         </div>
       </section>
@@ -124,16 +138,6 @@ export default function SoportePage() {
               )}
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* Legal */}
-      <section>
-        <div className="settings-group">
-          <h3>Legal</h3>
-          <button className="settings-row">Términos y condiciones <span>›</span></button>
-          <button className="settings-row">Aviso de privacidad <span>›</span></button>
-          <button className="settings-row">Eliminar mi cuenta <span style={{ color: 'var(--danger)' }}>›</span></button>
         </div>
       </section>
     </>

@@ -56,6 +56,13 @@ export async function POST(req: Request) {
   })
 
   if (error) {
+    if (error.code === 'PGRST202' || error.message.includes('create_support_request')) {
+      return jsonError(
+        'El módulo de soporte necesita actualizar la base de datos. Intenta de nuevo en unos minutos o contáctanos por WhatsApp.',
+        503,
+      )
+    }
+
     return jsonError(error.message, 400)
   }
 

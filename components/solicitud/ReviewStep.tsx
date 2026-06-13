@@ -114,7 +114,6 @@ export default function ReviewStep() {
     loadQuote()
     return () => { cancelled = true }
   // Se recalcula si cambia cualquier input que afecte el precio
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     originAddress,
     destinationAddress,

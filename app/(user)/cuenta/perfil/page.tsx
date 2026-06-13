@@ -350,6 +350,7 @@ export default function PerfilPage() {
                 flexShrink: 0,
               }}>
                 {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- Avatar desde URL firmada temporal de Supabase Storage.
                   <img
                     src={avatarUrl}
                     alt="Foto de perfil"

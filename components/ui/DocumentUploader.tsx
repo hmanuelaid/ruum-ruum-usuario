@@ -135,6 +135,7 @@ export function DocumentUploader({ doc, ownerId, ownerType, onUploaded }: Props)
             </div>
           ) : (
             <div style={{ position: 'relative', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- Vista previa local o URL firmada de documento privado. */}
               <img src={preview} alt={doc.label}
                 style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 'var(--radius-sm)' }} />
               {uploading && (

@@ -15,3 +15,11 @@ test('No hay ORS_API_KEY expuesta en .env.example', async () => {
   const hasExposed = /ORS_API_KEY\s*=\s*[^\s]/.test(content) && !/Provide your API key/.test(content)
   assert.strictEqual(hasExposed, false, '.env.example contiene un valor para ORS_API_KEY')
 })
+
+test('TripDetailSheet usa etiquetas centralizadas de estado', async () => {
+  const file = path.resolve(process.cwd(), 'components/viajes/TripDetailSheet.tsx')
+  const content = await fs.promises.readFile(file, 'utf8')
+
+  assert.match(content, /from ['"]@\/lib\/tripStatus['"]/, 'TripDetailSheet debe importar lib/tripStatus')
+  assert.doesNotMatch(content, /const\s+STATUS_LABELS\s*:/, 'No debe redefinir STATUS_LABELS localmente')
+})

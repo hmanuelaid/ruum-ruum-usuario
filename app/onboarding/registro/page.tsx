@@ -397,6 +397,7 @@ function DocCard({ doc, onFile }: { doc: DocState; onFile: (f: File) => void }) 
         <div style={{ padding: '0 14px 12px' }}>
           {doc.preview.startsWith('blob:') && (doc.preview.includes('image') || !doc.preview.includes('pdf')) ? (
             <div style={{ position: 'relative', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- Vista previa local blob antes de subir documento. */}
               <img src={doc.preview} alt={doc.label}
                 style={{ width: '100%', maxHeight: 140, objectFit: 'cover', display: 'block' }} />
               {doc.uploading && (
